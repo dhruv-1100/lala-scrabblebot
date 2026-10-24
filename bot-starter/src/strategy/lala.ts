@@ -39,7 +39,7 @@ export interface LalaParams extends ValueParams {
   minPlayLen: number; // shortest word played before the last few auctions
   kappaT: number;     // auctions over which leftover value fades out
   kappaMin: number;
-  phasePrices: number; // 1: price prior follows the live stage curve (tables.ts)
+  phasePrices: number; // 1: price prior follows the live stage curve (tables.ts); 2: recent refit
   priceN0: number;    // prior weight (in observations) on the price table
   shadeSigma: number; // first-price: spread of the rival-max distribution
   paceRate: number;   // >0: target tiles bought per auction (winners buy ~16 a match). When
@@ -96,7 +96,7 @@ export class Lala implements Agent {
   // match's prices compare with it so far.
   prices(v: View): Float64Array {
     const prior = (round: number, k: number): number =>
-      (this.p.phasePrices ? phasePrice(round, k) : null) ?? LIVE_PAID[k]!;
+      (this.p.phasePrices ? phasePrice(round, k, this.p.phasePrices === 2) : null) ?? LIVE_PAID[k]!;
     let sum = 0;
     let n = 0;
     for (const o of v.tracker.prices) {

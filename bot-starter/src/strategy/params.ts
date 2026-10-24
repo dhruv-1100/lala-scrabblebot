@@ -2,7 +2,7 @@
 import type { LalaParams } from "./lala.js";
 
 // Logged by the live bot so live results can be credited to a version.
-export const VERSION = "v2.6";
+export const VERSION = "v2.6.1";
 
 export const TUNED: Partial<LalaParams> = {
   muAlpha: 0.6, kappa0: 3.5, winP: 0.9, dupDecay: 0.8, kappa1: 1, maxMissing: 2,
@@ -12,7 +12,7 @@ export const TUNED: Partial<LalaParams> = {
   // v2.0a: vowels valued like 1-point consonants (v1 bought 30% vowels vs
   // 37-44% for the top bots) and a price prior that follows the live stage
   // curve (high-value letters get cheaper late).
-  vowelUse: 1.0, phasePrices: 1,
+  vowelUse: 1.0,
   // v2.0: leftover tile values learned from 218k simulated positions
   // (scripts/train-leave.ts); vowels come out worth more than 1-point
   // consonants. Paired check vs v1.1 (market, n=1000): win +4.6 pts.
@@ -37,6 +37,11 @@ export const TUNED: Partial<LalaParams> = {
   // worth ~40% more per tile, so the scale drops to 0.5. Paired sim (market,
   // n=1200) vs v2.5.1: win +4.0 +/- 3.2 pts, place -0.117 +/- 0.072, score +2.4.
   leaveLive: 1, leaveScale: 0.5,
+  // v2.6.1: stage price prior refit on the latest 900 matches; high-value
+  // letters got 2-5 coins cheaper mid/late game (mid Z 40 -> 35, late Q
+  // 23 -> 18), 1-point letters unchanged. Sim neutral (its market bots still
+  // price from the old table): place +0.019 +/- 0.052.
+  phasePrices: 2,
 };
 
 // Simulated stand-in for strong live entrants (calibrated in ANALYSIS.md):

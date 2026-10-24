@@ -30,6 +30,8 @@ export const LEAVE: LeaveTable | null = readJson<LeaveTable>("leave-table.json")
 // The same model fitted to real matches (scripts/train-leave-live.ts).
 export const LEAVE_LIVE: LeaveTable | null = readJson<LeaveTable>("leave-table-live.json");
 export const PHASE: PhasePrices | null = readJson<PhasePrices>("phase-prices.json");
+// Refit on the most recent 900 matches (scripts/phase-prices-recent.ts).
+export const PHASE_RECENT: PhasePrices | null = readJson<PhasePrices>("phase-prices-recent.json");
 
 // Cumulative leave value (points) of holding `copies` of letter k when
 // `T` auctions are left. Copies past the third are worth half the third.
@@ -46,10 +48,11 @@ export function leaveValue(T: number, k: number, copies: number, live = false): 
 }
 
 // Expected price of letter k at 1-based round `round`.
-export function phasePrice(round: number, k: number): number | null {
-  if (!PHASE) return null;
-  const s = PHASE.cuts.findIndex((c) => round <= c);
-  return PHASE.prices[s < 0 ? PHASE.prices.length - 1 : s]![k]!;
+export function phasePrice(round: number, k: number, recent = false): number | null {
+  const P = recent && PHASE_RECENT ? PHASE_RECENT : PHASE;
+  if (!P) return null;
+  const s = P.cuts.findIndex((c) => round <= c);
+  return P.prices[s < 0 ? P.prices.length - 1 : s]![k]!;
 }
 
 // Future points per coin at `T` auctions left, from the same regression as the
