@@ -2,12 +2,10 @@
 import type { LalaParams } from "./lala.js";
 
 export const TUNED: Partial<LalaParams> = {
-  mu0: 0.3, muAlpha: 0.6, kappa0: 3.5, winP: 0.9, dupDecay: 0.8, kappa1: 1, maxMissing: 2,
+  muAlpha: 0.6, kappa0: 3.5, winP: 0.9, dupDecay: 0.8, kappa1: 1, maxMissing: 2,
   liq: 0, share: 0.2, incomeW: 0.3, rho: 0.6,
-  // v1.1: keep a reserve for the last 12 auctions and never pay more than
-  // 1.6x the going price before the last 3 (paired sim vs live-like rivals,
-  // n=1000: place -0.148 +/- 0.053).
-  lateMu: 0.6, capMul: 1.6,
+  // v1.1 introduced the late reserve (lateMu) and the bid cap relative to the
+  // going price (capMul); their values are set in v2.1 below.
   // v2.0a: vowels valued like 1-point consonants (v1 bought 30% vowels vs
   // 37-44% for the top bots) and a price prior that follows the live stage
   // curve (high-value letters get cheaper late).
@@ -15,7 +13,10 @@ export const TUNED: Partial<LalaParams> = {
   // v2.0: leftover tile values learned from 218k simulated positions
   // (scripts/train-leave.ts); vowels come out worth more than 1-point
   // consonants. Paired check vs v1.1 (market, n=1000): win +4.6 pts.
-  leaveW: 1, leaveScale: 0.7,
+  leaveW: 1,
+  // v2.1: retuned around the learned leave table (market field, n=1000 per
+  // trial, same seeds): win 51.7% -> 55.7%, place 1.98 -> 1.76.
+  leaveScale: 0.5, mu0: 0.25, capMul: 1.4, premium: 0.9, lateMu: 0.8,
 };
 
 // Simulated stand-in for strong live entrants (calibrated in ANALYSIS.md):
