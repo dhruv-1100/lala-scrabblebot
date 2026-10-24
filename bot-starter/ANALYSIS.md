@@ -153,3 +153,47 @@ v2.3 sets `lateMu` to 1. The horizon term in `mu()` still spends coins that
 will be worthless. Paired n=500 against v2.2: on the pop field (Lambi, Dante,
 Nijello, postturing styles) place −0.056 ± 0.052 and score +1.6 ± 0.5; on
 live-like rivals score +0.9 ± 0.5 and place unchanged.
+
+**Live outcome of v2.3 (reverted in v2.4).** 11 live games: 9% wins, place 3.45 +/- 0.89,
+score 68, the weakest v2 version. Combined with the earlier sim evidence for a late
+reserve (v1.1), `lateMu` went back to 0.6.
+
+## 9. Live results by version (`analysis/versions.ts`)
+
+| version | games | win% | avg place | avg score | what changed |
+|---|---|---|---|---|---|
+| v0.1 | 42 | 14 | 3.31 | 81 | first live version |
+| v1.1 | 79 | 13 | 3.27 | 81 | late reserve, 1.6x price cap |
+| v2.0 | 17 | 41 | 2.29 | 103 | learned leave table, vowel fix, stage prices |
+| v2.1 | 8 | 25 | 2.88 | 89 | sim retune (premium 0.9, cap 1.4x) |
+| v2.2 | 38 | 26 | 2.97 | 81 | v2.0 + starvation cash-in rule |
+| v2.3 | 11 | 9 | 3.45 | 68 | v2.2 + lateMu 1 (Cursor) |
+| v2.4 | 1 | 0 | 6 | 54 | v2.0 settings restored |
+
+Opponent strength differed (average current rating of Lala's opponents: v2.0 1682,
+v2.2 1757, v2.3 1823), so part of v2.0's lead is an easier field. But Lala's own score
+fell 22 points from v2.0 to v2.2 while v2.2's best rivals scored *less* (101 vs 109):
+the starvation rule cashes 5-6 letter words at 2-2.5x instead of 7+ at 3x. v2.4 drops it.
+
+## 10. Reverse-engineering the top bots (`analysis/reverse.ts`, last 1200 matches)
+
+Each bot's rack and balance were rebuilt round by round from public results, archived
+winning bids and word plays.
+
+| | top bots (Dante, Nijello, postturing, Lambi, Metheny, Doppio) | Lala |
+|---|---|---|
+| bid/price, letter that completes a word within 1 round vs other letters | 1.19-1.42 vs 1.09-1.24 | 1.18 vs 1.20 |
+| share of buys that complete a word within 1 round | 16-27% | 14% |
+| median rounds from buying a tile to playing it | 7-11 | 13 |
+| points per letter in 7+ letter words | 1.98-2.22 | 1.94 |
+| 7+ letter words per match | 1.40-1.80 | 1.43 |
+| rounds with < 12 coins (rounds 10-60) | 1.3-8.5 | 7.8 |
+
+**Change (v2.5):** the top bots pay a premium for a letter that finishes a word now; Lala
+paid less than for other letters, because its valuation assumes a missing letter will
+probably come later. Lala now bids at least 1.4x the going price when the letter
+completes a 6+ letter word worth 12+ more points. Paired sim (market, n=1200):
+place -0.128 +/- 0.081, score +2.1 +/- 1.1. 1.55x was slightly worse (place -0.102).
+
+Not yet acted on: the top bots' 7+ words use higher-value letters (2.05-2.22 points per
+letter vs 1.94) and they turn tiles over faster (7-11 rounds vs 13).
