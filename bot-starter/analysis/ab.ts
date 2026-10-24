@@ -1,4 +1,4 @@
-// Live A/B summary: games are interleaved by match id (even = arm A, odd = B),
+// Live A/B summary: games are split between arms by a hash of the match id,
 // so both arms face the same field. Reads data/live/matches-*.jsonl.
 //   npx tsx analysis/ab.ts [version=v2.7-ab]
 import * as fs from "node:fs";

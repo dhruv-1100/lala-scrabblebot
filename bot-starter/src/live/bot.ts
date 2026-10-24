@@ -37,12 +37,13 @@ fs.mkdirSync(LOG_DIR, { recursive: true });
 const params: Partial<LalaParams> = { ...TUNED, ...JSON.parse(process.env.LALA_PARAMS ?? "{}") };
 const dict = loadDict();
 const lala = new Lala(dict, params, BOT_NAME);
-// Interleaved A/B: even match ids play arm A (params), odd ids arm B.
+// Interleaved A/B: a hash of the match id picks the arm. (Plain parity broke:
+// Lala's match ids often step by exactly 8, putting every game in arm A.)
 const AB_ON = Object.keys(VARIANT_B).length > 0 && process.env.AB !== "0";
 const paramsB: Partial<LalaParams> = { ...params, ...VARIANT_B };
 const lalaB = new Lala(dict, paramsB, `${BOT_NAME}-B`);
 function arm(matchId: bigint): "A" | "B" {
-  return AB_ON && matchId % 2n === 1n ? "B" : "A";
+  return AB_ON && ((Math.imul(Number(matchId % 4294967296n), 2654435761) >>> 16) & 1) === 1 ? "B" : "A";
 }
 
 // ---------- logging ----------
@@ -453,6 +454,6 @@ process.on("uncaughtException", (e) => {
   process.exit(1); // pm2 restarts us
 });
 
-log(`version ${VERSION}${AB_ON ? ` (A/B: odd matches play ${JSON.stringify(VARIANT_B)})` : ""}`);
+log(`version ${VERSION}${AB_ON ? ` (A/B by match-id hash; arm B plays ${JSON.stringify(VARIANT_B)})` : ""}`);
 log(`params ${JSON.stringify(params)}`);
 connect();
