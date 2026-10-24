@@ -16,7 +16,7 @@ import type { Identity } from "spacetimedb";
 import { loadDict } from "../engine/dict.js";
 import { LIVE_PAID } from "../sim/agents.js";
 import { Lala, type LalaParams } from "../strategy/lala.js";
-import { TUNED, VERSION } from "../strategy/params.js";
+import { TUNED, VERSION, VARIANT_B } from "../strategy/params.js";
 import { buildView, readMatch } from "./view.js";
 import { idx, countsToString } from "../engine/letters.js";
 
@@ -37,6 +37,13 @@ fs.mkdirSync(LOG_DIR, { recursive: true });
 const params: Partial<LalaParams> = { ...TUNED, ...JSON.parse(process.env.LALA_PARAMS ?? "{}") };
 const dict = loadDict();
 const lala = new Lala(dict, params, BOT_NAME);
+// Interleaved A/B: even match ids play arm A (params), odd ids arm B.
+const AB_ON = Object.keys(VARIANT_B).length > 0 && process.env.AB !== "0";
+const paramsB: Partial<LalaParams> = { ...params, ...VARIANT_B };
+const lalaB = new Lala(dict, paramsB, `${BOT_NAME}-B`);
+function arm(matchId: bigint): "A" | "B" {
+  return AB_ON && matchId % 2n === 1n ? "B" : "A";
+}
 
 // ---------- logging ----------
 
@@ -160,7 +167,7 @@ function decide(auctionId: bigint): void {
   const balance = m.balances.get(me)?.balance ?? 0;
   try {
     const view = buildView(m, me, a.letter);
-    const d = lala.act(view);
+    const d = (arm(a.matchId) === "B" ? lalaB : lala).act(view);
     bid = d.bid;
     words = d.words;
     info = { value: +d.value.toFixed(2), marginal: +d.marginal.toFixed(2), mu: +d.mu.toFixed(3) };
@@ -173,7 +180,7 @@ function decide(auctionId: bigint): void {
   handled.set(auctionId, { bid, words });
   jsonl("decisions", {
     match: a.matchId, auction: auctionId, round: m.results.length + 1, left: m.bagTotal + 1,
-    letter: a.letter, rack: countsToString(m.rack), balance, words, bid, ms: +ms.toFixed(1), lagMs: recvLag, ...info,
+    letter: a.letter, rack: countsToString(m.rack), balance, words, bid, ms: +ms.toFixed(1), lagMs: recvLag, arm: arm(a.matchId), ...info,
   });
   if (DRY_RUN) {
     log(`[dry] ${a.letter} rack=${countsToString(m.rack)} bal=${balance} words=${words.join(",")} bid=${bid}`);
@@ -226,10 +233,11 @@ function onMatchEnded(matchId: bigint): void {
   const row = {
     match: matchId, place, score: Number(mine.score), balance: Number(mine.balance),
     scores: parts.map((p) => ({ bot: p.botId, score: p.score })).sort((a, b) => Number(b.score - a.score)),
-    words, tiles: won.length, spent: won.reduce((s, r) => s + Number(r.paid), 0), params,
+    words, tiles: won.length, spent: won.reduce((s, r) => s + Number(r.paid), 0),
+    arm: arm(matchId), version: VERSION, params: arm(matchId) === "B" ? paramsB : params,
   };
   jsonl("matches", row);
-  log(`match ${matchId} ended: place ${place}/${parts.length} score ${mine.score} words ${words.join(" ")}`);
+  log(`match ${matchId} ended: place ${place}/${parts.length} score ${mine.score} arm ${arm(matchId)} words ${words.join(" ")}`);
   setTimeout(() => maybeJoinLobby(true), 300);
 }
 
@@ -445,6 +453,6 @@ process.on("uncaughtException", (e) => {
   process.exit(1); // pm2 restarts us
 });
 
-log(`version ${VERSION}`);
+log(`version ${VERSION}${AB_ON ? ` (A/B: odd matches play ${JSON.stringify(VARIANT_B)})` : ""}`);
 log(`params ${JSON.stringify(params)}`);
 connect();

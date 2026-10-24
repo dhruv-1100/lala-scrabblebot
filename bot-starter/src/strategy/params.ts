@@ -2,7 +2,7 @@
 import type { LalaParams } from "./lala.js";
 
 // Logged by the live bot so live results can be credited to a version.
-export const VERSION = "v2.7";
+export const VERSION = "v2.7-ab";
 
 export const TUNED: Partial<LalaParams> = {
   muAlpha: 0.6, kappa0: 3.5, winP: 0.9, dupDecay: 0.8, kappa1: 1, maxMissing: 2,
@@ -61,3 +61,12 @@ export const RIVAL_STYLES: Partial<LalaParams>[] = [
   // A typical mid-table entrant.
   { ...RIVAL_BASE, premium: 1.0, bidNoise: 0.35 },
 ];
+
+// Live A/B test (interleaved by match id, so both arms face the same field at
+// the same time). Arm A plays TUNED; arm B plays TUNED + VARIANT_B.
+// Set VARIANT_B to {} to switch the test off.
+export const VARIANT_B: Partial<LalaParams> = {
+  // Bid 15% more over the first 25 auctions: Lala's 5th/6th finishes bought
+  // 7.5 tiles and still had 66 of 100 coins at round 20.
+  earlyN: 25, earlyPremium: 1.15,
+};
