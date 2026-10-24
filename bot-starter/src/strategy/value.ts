@@ -37,6 +37,8 @@ export interface ValueParams {
   kappa1: number;      //   kappaScale * kappa0 * usefulness + kappa1 * letter value
   dupDecay: number;    // each extra copy of a letter is worth this much less
   liveUse: number;     // 0: dictionary usefulness table; 1: live-measured LIVE_USE
+  leaveCapN: number;   // >0: past this many leftover tiles, leftover value scales by capN/n
+                       // (additive leave values made 13-tile racks look worth ~65 points)
   leaveW: number;      // 0..1: share of leftover value taken from the learned leave table
   leaveScale: number;  // points of table value per point of leftover value
   vowelUse: number;    // >0: usefulness of A/E/I/O/U in the dictionary table (it rates them 0.73-0.97)
@@ -120,8 +122,10 @@ export class Valuer {
     const notRack = ~(rackMask | (1 << letter));
     const maxMissing = Math.min(p.maxMissing, futureDraws);
     const [s, e] = d.range(p.minLen, Math.min(p.maxLen, rackTiles + 1 + maxMissing));
-    let best0 = rackKappa; // keeping every tile as a leftover
-    let bestL = rackKappa + kNext;
+    const capN = p.leaveCapN;
+    const sz = (n: number): number => (capN > 0 && n > capN ? capN / n : 1);
+    let best0 = rackKappa * sz(rackTiles); // keeping every tile as a leftover
+    let bestL = (rackKappa + kNext) * sz(rackTiles + 1);
     let bestWord = -1;
     const dOff = d.dOff, dl = d.dl, dc = d.dc, reward = d.reward, pObt = this.pObt, mask = d.mask;
     const limit = maxMissing + 1;
@@ -139,6 +143,7 @@ export class Valuer {
       let prob = 1;
       let cost = 0;
       let used = 0; // kappa of rack tiles the word uses
+      let usedN = 0; // how many rack tiles the word uses
       let defL = 0; // how many `letter` the word still lacks
       const pe = dOff[i + 1]!;
       let q = dOff[i]!;
@@ -153,22 +158,25 @@ export class Valuer {
           prob *= pObt[k * 6 + (def > 5 ? 5 : def)]!;
           cost += def * costW[k]!;
           used += cumK[k * 8 + (have > 7 ? 7 : have)]!;
+          usedN += have;
           if (k === letter) defL = def;
         } else {
           used += cumK[k * 8 + (need > 7 ? 7 : need)]!;
+          usedN += need;
         }
       }
       if (q < pe) continue; // too many missing
       const r = reward[i]!;
       // Plan with the rack as is.
       if (missing <= maxMissing) {
-        const v = prob * r - cost + rackKappa - used;
+        const left = rackTiles - usedN;
+        const v = prob * r - cost + (rackKappa - used) * sz(left);
         if (v > best0) {
           best0 = v;
           bestWord = i;
         }
         if (defL === 0) {
-          const vL = v + kNext;
+          const vL = prob * r - cost + (rackKappa - used + kNext) * sz(left + 1);
           if (vL > bestL) bestL = vL;
         }
       }
@@ -177,7 +185,7 @@ export class Valuer {
         const pk = pObt[letter * 6 + (defL > 5 ? 5 : defL)]!;
         const pk1 = pObt[letter * 6 + (defL - 1 > 5 ? 5 : defL - 1)]!;
         const probL = pk > 0 ? (prob / pk) * pk1 : 0;
-        const vL = probL * r - (cost - costW[letter]!) + rackKappa - used;
+        const vL = probL * r - (cost - costW[letter]!) + (rackKappa - used) * sz(rackTiles - usedN);
         if (vL > bestL) bestL = vL;
       }
     }

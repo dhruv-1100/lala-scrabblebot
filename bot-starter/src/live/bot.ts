@@ -76,8 +76,10 @@ let conn: DbConnection | null = null;
 let myIdentity: Identity | null = null;
 let myBotId: bigint | null = null;
 let lastEventAt = Date.now();
+let lastAuctionAt = Date.now(); // an auction opens every second during our matches
 let lastLobbyJoin = 0;
 let reconnectDelay = 1000;
+let lastReconnectAt = 0;
 let mainSub: { unsubscribe(): void } | null = null;
 let subFloor = 0n;
 const handled = new Map<bigint, { bid: number; words: string[] }>(); // auctionId -> what we sent
@@ -326,6 +328,7 @@ function wire(c: DbConnection): void {
   };
   c.db.auction.onInsert((_ctx, a) => {
     touch();
+    lastAuctionAt = Date.now();
     if (a.status.tag === "Open") setImmediate(() => decide(a.id));
   });
   c.db.auctionResult.onInsert((_ctx, r) => {
@@ -401,6 +404,22 @@ setInterval(() => {
   if (!c) return;
   scheduleOpenAuctions();
   maybeJoinLobby();
+  // A stalled socket mid-match costs the whole match (match 3967: no events
+  // for ~70 s, score 0). Auctions open every second, so 5 s of silence while
+  // we're in a running match means the connection is dead: rebuild it now.
+  if (myRunningMatches(c).length > 0 && Date.now() - lastAuctionAt > 5_000 && Date.now() - lastReconnectAt > 10_000) {
+    log(`no auction for ${Math.round((Date.now() - lastAuctionAt) / 1000)}s during a match; rebuilding the connection`);
+    jsonl("errors", { what: "stall", ms: Date.now() - lastAuctionAt });
+    lastReconnectAt = Date.now();
+    lastAuctionAt = Date.now();
+    try {
+      c.disconnect();
+    } catch {
+      /* already gone */
+    }
+    retryLater();
+    return;
+  }
   if (Date.now() - lastEventAt > 180_000) {
     log("no updates for 3 minutes; rebuilding the connection");
     lastEventAt = Date.now();
@@ -417,7 +436,7 @@ setInterval(() => {
   for (const m of c.db.matchState.iter()) if (m.id > maxMatch) maxMatch = m.id;
   if (maxMatch - subFloor > 200n && myRunningMatches(c).length === 0) bootstrap(c);
   for (const [aid] of handled) if (handled.size > 5000) handled.delete(aid);
-}, 2000);
+}, 1000);
 
 process.on("unhandledRejection", (e) => log(`unhandled rejection: ${String(e)}`));
 process.on("uncaughtException", (e) => {

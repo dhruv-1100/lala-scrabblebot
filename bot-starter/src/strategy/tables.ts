@@ -19,6 +19,7 @@ function readJson<T>(file: string): T | null {
 export interface LeaveTable {
   buckets: [number, number][]; // [lo, hi] of auctions left
   table: number[][][];         // [bucket][letter][copy 1..3] marginal future points
+  meta?: { balCoef: number }[]; // future points per 100 coins, per bucket
 }
 export interface PhasePrices {
   cuts: number[];              // upper round bound of each stage
@@ -46,4 +47,13 @@ export function phasePrice(round: number, k: number): number | null {
   if (!PHASE) return null;
   const s = PHASE.cuts.findIndex((c) => round <= c);
   return PHASE.prices[s < 0 ? PHASE.prices.length - 1 : s]![k]!;
+}
+
+// Future points per coin at `T` auctions left, from the same regression as the
+// leave values (its balance term). 0 when no auctions are left to spend in.
+export function coinValue(T: number): number {
+  if (!LEAVE?.meta || T <= 2) return 0;
+  let b = LEAVE.buckets.findIndex(([lo, hi]) => T >= lo && T <= hi);
+  if (b < 0) b = T > 40 ? 0 : LEAVE.buckets.length - 1;
+  return Math.max(0, LEAVE.meta[b]!.balCoef / 100);
 }

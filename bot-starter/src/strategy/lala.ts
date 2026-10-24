@@ -11,7 +11,7 @@ import { VALUE, VOWELS, type Counts } from "../engine/letters.js";
 import { bestPartition, playable, removeWord } from "../engine/words.js";
 import type { Action, Agent, View } from "../sim/types.js";
 import { Valuer, LIVE_USE, USEFUL, type ValueParams } from "./value.js";
-import { phasePrice } from "./tables.js";
+import { phasePrice, coinValue } from "./tables.js";
 import { LIVE_PAID } from "../sim/agents.js";
 import { Rng } from "../engine/rng.js";
 
@@ -25,6 +25,13 @@ export interface LalaParams extends ValueParams {
   premium: number;    // bid multiplier on marginal value
   liq: number;        // bonus per point for cashing a word in early
   playMargin: number; // points a play must beat holding by
+  coinW: number;      // weight on the coins a play returns, valued at the leave table's own
+                      // learned points-per-coin (0.56 early/mid x leaveScale). v2.5 valued
+                      // held tiles by that model but coins at 0, so it hoarded while broke.
+  affordK: number;    // >0: scale the chance of winning missing letters by what we can
+                      // afford, min(1, coins / (affordK x average price)). Without it a
+                      // broke rack is valued as if its missing letters were 90% likely,
+                      // so Lala held complete words for 25+ rounds with 1 coin.
   starveBal: number;  // below this many coins, with starveT+ auctions left, cash the best
   starveT: number;    // 4+ letter word even if holding might pay more (live: starved
                       // hoarders lose 15+ auctions in a row; 0 = off)
@@ -35,6 +42,12 @@ export interface LalaParams extends ValueParams {
   phasePrices: number; // 1: price prior follows the live stage curve (tables.ts)
   priceN0: number;    // prior weight (in observations) on the price table
   shadeSigma: number; // first-price: spread of the rival-max distribution
+  paceRate: number;   // >0: target tiles bought per auction (winners buy ~16 a match). When
+  paceK: number;      // behind it by more than one tile, raise bids by paceK per missing
+  paceMax: number;    // tile, up to paceMax x. v2's last places bought 7.5 tiles with 66
+                      // coins still unspent at round 20.
+  hiBoost: number;    // extra marginal value for 4+ point letters (top bots buy 2.2-2.8 of
+                      // them per match, v2 bought 1.87; they return more points per coin)
   completeMul: number; // bid at least completeMul x the going price for a letter that
   completeMin: number; // completes a completeLen+ letter word worth completeMin+ more points
   completeLen: number; // than the best word now (top bots pay 1.2-1.4x for these; v2 paid 1.18x)
@@ -52,10 +65,10 @@ export interface LalaParams extends ValueParams {
 }
 
 export const DEFAULT_LALA: LalaParams = {
-  winP: 0.6, maxMissing: 3, rho: 1.0, kappa0: 2.5, kappa1: 0.5, dupDecay: 0.6, liveUse: 0, vowelUse: 0, leaveW: 0, leaveScale: 1, minLen: 2, maxLen: 8,
+  winP: 0.6, maxMissing: 3, rho: 1.0, kappa0: 2.5, kappa1: 0.5, dupDecay: 0.6, liveUse: 0, vowelUse: 0, leaveCapN: 0, leaveW: 0, leaveScale: 1, minLen: 2, maxLen: 8,
   mu0: 0.25, muAlpha: 1.0, muMin: 0.05, muMax: 1.5, share: 0.2, incomeW: 0.7,
-  premium: 1.0, liq: 0.1, playMargin: 0, starveBal: 0, starveT: 8, playK: 1, minPlayLen: 2, kappaT: 15, kappaMin: 0.3,
-  phasePrices: 0, priceN0: 8, shadeSigma: 0.35, completeMul: 0, completeMin: 12, completeLen: 6, vowelBal: 0, capMul: 99, muMode: 0, riskN: 0, riskUp: 1, riskGap: 25, lateN: 12, lateMu: 1, bidNoise: 0, seed: 1,
+  premium: 1.0, liq: 0.1, playMargin: 0, coinW: 0, affordK: 0, starveBal: 0, starveT: 8, playK: 1, minPlayLen: 2, kappaT: 15, kappaMin: 0.3,
+  phasePrices: 0, priceN0: 8, shadeSigma: 0.35, paceRate: 0, paceK: 0.1, paceMax: 1.4, hiBoost: 0, completeMul: 0, completeMin: 12, completeLen: 6, vowelBal: 0, capMul: 99, muMode: 0, riskN: 0, riskUp: 1, riskGap: 25, lateN: 12, lateMu: 1, bidNoise: 0, seed: 1,
 };
 
 export interface Decision extends Action {
@@ -204,8 +217,18 @@ export class Lala implements Agent {
     const futureDraws = Math.max(0, T - 2);
     const prices = this.prices(v);
     const ks = this.kappaScale(futureDraws);
-    const evalRack = (r: Counts, mu: number, kMul = 1) =>
-      this.valuer.evaluate(r, v.letter, v.tracker.unseen, futureDraws, prices, mu, p, ks, kMul);
+    // Average price of an unseen letter, for affordability.
+    let avgPrice = 0;
+    let unseenTot = 0;
+    for (let k = 0; k < 26; k++) {
+      avgPrice += v.tracker.unseen[k]! * prices[k]!;
+      unseenTot += v.tracker.unseen[k]!;
+    }
+    avgPrice = unseenTot ? avgPrice / unseenTot : 11;
+    const withCoins = (coins: number): ValueParams =>
+      p.affordK > 0 ? { ...p, winP: p.winP * Math.max(0.05, Math.min(1, coins / (p.affordK * avgPrice))) } : p;
+    const evalRack = (r: Counts, mu: number, kMul = 1, coins = balance) =>
+      this.valuer.evaluate(r, v.letter, v.tracker.unseen, futureDraws, prices, mu, withCoins(coins), ks, kMul);
 
     // Word plays: take a word whenever cashing it beats holding its tiles.
     let mu = this.mu(v, balance, 0, prices, futureDraws);
@@ -216,6 +239,7 @@ export class Lala implements Agent {
       const cands = playable(this.dict, rack, futureDraws <= 3 ? 2 : p.minPlayLen, 8);
       if (!cands.length) break;
       const phi = futureDraws / 60;
+      const perCoin = p.coinW * coinValue(T) * p.leaveScale;
       // A tie goes to playing: same points, but the coins arrive sooner.
       let bestGain = p.playMargin - 1e-6;
       let bestIdx = -1;
@@ -223,12 +247,12 @@ export class Lala implements Agent {
       for (const i of cands) {
         // Holding never loses value by having more tiles, so a play gains
         // at most its own reward: stop once that can't beat the best.
-        if (this.dict.reward[i]! * (1 + p.liq * mu * phi) <= bestGain) break;
+        if (this.dict.reward[i]! * (1 + p.liq * mu * phi + perCoin) <= bestGain) break;
         const w = this.dict.words[i]!;
-        const after = evalRack(removeWord(rack, w), mu, p.playK);
+        const after = evalRack(removeWord(rack, w), mu, p.playK, balance + this.dict.reward[i]!);
         // Coins from a play are worth more the scarcer coins are (mu) and
         // the more auctions are left to spend them in (phi).
-        const gain = this.dict.reward[i]! * (1 + p.liq * mu * phi) + after.base - hold.base;
+        const gain = this.dict.reward[i]! * (1 + p.liq * mu * phi + perCoin) + after.base - hold.base;
         if (gain > bestGain) {
           bestGain = gain;
           bestIdx = i;
@@ -262,7 +286,14 @@ export class Lala implements Agent {
     const val = evalRack(rack, mu);
     let marginal = Math.max(0, val.withLetter - val.base);
     if (p.vowelBal > 0) marginal *= this.balanceFactor(rack, v.letter);
+    if (p.hiBoost > 0 && VALUE[v.letter]! >= 4) marginal *= 1 + p.hiBoost;
     let bid = (marginal / mu) * p.premium;
+    if (p.paceRate > 0 && T > 8 && marginal > 0) {
+      let won = 0;
+      for (const o of v.tracker.prices) if (o.winner === v.me) won++;
+      const behind = p.paceRate * (v.round - 1) - won;
+      if (behind > 1) bid *= Math.min(p.paceMax, 1 + p.paceK * (behind - 1));
+    }
     if (T > 3) bid = Math.min(bid, p.capMul * prices[v.letter]!);
     // Finishing a word now is worth more than the letter's average value:
     // the points are certain and the coins come back for the next buy.
