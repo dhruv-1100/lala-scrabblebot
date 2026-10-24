@@ -113,6 +113,16 @@ function heldForTournament(c: DbConnection): boolean {
   return false;
 }
 
+// Unsubscribe that tolerates a handle the SDK already closed (it replays
+// subscriptions after an automatic reconnect, re-firing onApplied).
+function safeUnsubscribe(h: { unsubscribe(): void } | null | undefined): void {
+  try {
+    h?.unsubscribe();
+  } catch {
+    /* already unsubscribed */
+  }
+}
+
 function call(what: string, p: Promise<unknown>): Promise<boolean> {
   return p.then(
     () => true,
@@ -255,9 +265,19 @@ function subscribeMain(c: DbConnection, floor: bigint, lobbyFloor: bigint): void
     `SELECT * FROM lobby WHERE id >= ${lobbyFloor}`,
     `SELECT * FROM lobby_member WHERE lobby_id >= ${lobbyFloor}`,
   ];
+  let applied = false;
   mainSub = c.subscriptionBuilder()
     .onApplied(() => {
-      old?.unsubscribe();
+      // Replayed after every automatic reconnect: only the first run swaps
+      // subscriptions; later runs just resync auctions and the lobby.
+      if (applied) {
+        lastEventAt = Date.now();
+        scheduleOpenAuctions();
+        maybeJoinLobby(true);
+        return;
+      }
+      applied = true;
+      safeUnsubscribe(old);
       lastEventAt = Date.now();
       myBotId = myIdentity ? (c.db.botCredential.identity.find(myIdentity)?.botId ?? null) : null;
       if (myBotId === null) {
@@ -280,8 +300,11 @@ function subscribeMain(c: DbConnection, floor: bigint, lobbyFloor: bigint): void
 // Find the newest match and lobby ids with a one-off query, then subscribe
 // to everything from there on. Matches we're still in are included.
 function bootstrap(c: DbConnection): void {
+  let done = false;
   const sub = c.subscriptionBuilder()
     .onApplied(() => {
+      if (done) return;
+      done = true;
       let maxMatch = 0n;
       let minRunning: bigint | null = null;
       for (const m of c.db.matchState.iter()) {
@@ -292,7 +315,7 @@ function bootstrap(c: DbConnection): void {
       for (const l of c.db.lobby.iter()) if (l.id > maxLobby) maxLobby = l.id;
       const floor = minRunning !== null && minRunning < maxMatch ? minRunning : maxMatch;
       subscribeMain(c, floor, maxLobby > 2n ? maxLobby - 2n : 0n);
-      sub.unsubscribe();
+      safeUnsubscribe(sub);
     })
     .subscribe(["SELECT * FROM match_state", "SELECT * FROM lobby"]);
 }

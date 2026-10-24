@@ -110,8 +110,29 @@ Vickrey bid. Words are played when cashing beats holding.
 | Ties between hold and play go to play | QUIXOTE no longer held | yes |
 | Soft-max over plans instead of max | place 3.31 -> 5.61 as tau grows (letters' marginal value shrinks) | no |
 | Play earlier (lower playK, 7-letter minimum, coin-scarcity bonus) | worse in every field: e.g. place 2.57 -> 2.85 (sim, live-like) | no |
-| Later reserve (`lateMu` 0.6) | place 2.57 -> 2.51 (n.s.) | see section 7 |
+| Later reserve (`lateMu` 0.6) | place 2.57 -> 2.51 (n.s.) | yes, with the cap |
+| Vowel-balance bonus | place 2.49 -> 2.63 / 2.86 | no |
+| Bid cap 1.6x the going price + late reserve (v1.1) | paired n=1000 vs v1.0 on live-like rivals: place -0.148 +/- 0.053, win +2.8 +/- 2.1 pts, score +1.4 +/- 0.6 | yes (`lala-v1.1`) |
+
+Parameter search has plateaued: the last nine variants all moved average place by less than
+the CI (+/-0.13 at n=420). Further gains need structural changes (see the v2 research report).
 
 ## 7. Live results
 
-(filled in from `analysis/live.ts`; see the summary at the end)
+Lala (team Yuvak, bot id 88) started live play on 2026-10-24 at 15:44 UTC.
+
+| Version | Matches | Win rate | Avg place | Avg score | Field avg | Best rival |
+|---|---|---|---|---|---|---|
+| v0.1 (`lala-v0.1`) | 41 | 15% | 3.3 | 80 | 77 | 106 |
+| v1.1 (`lala-v1.1`), first 11 | 11 | 18% | 3.36 +/- 0.80 | 78 | 69 | 107 |
+
+Rating after 52 matches: **1916 +/- 106 (ranked 25th of 78)**, 8 wins, no provisional flag.
+Decision latency: compute p50 8 ms, p99 32 ms; bids land 20-70 ms after an auction opens;
+0 fallback bids, 0 refused words, 0 disconnects.
+
+**Sim vs live.** Against live-like rivals the simulator predicts place ~2.4-2.5; live is ~3.3.
+Lala's own score is about the same in both (84 sim vs 80 live); the gap is the field:
+live rivals score more than the simulated ones (best rival 106 vs ~98). The live winners
+in Lala's matches play their first word at round ~28 (Lala ~38) and spend ~195 coins
+(Lala ~164) on ~14 tiles (Lala ~12.5). Earlier play does not help Lala in any simulated
+field, so this is the main open question for v2.

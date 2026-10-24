@@ -10,7 +10,7 @@ import type { Dict } from "../engine/dict.js";
 import { VALUE, VOWELS, type Counts } from "../engine/letters.js";
 import { bestPartition, playable, removeWord } from "../engine/words.js";
 import type { Action, Agent, View } from "../sim/types.js";
-import { Valuer, type ValueParams } from "./value.js";
+import { Valuer, LIVE_USE, USEFUL, type ValueParams } from "./value.js";
 import { LIVE_PAID } from "../sim/agents.js";
 import { Rng } from "../engine/rng.js";
 
@@ -32,6 +32,11 @@ export interface LalaParams extends ValueParams {
   shadeSigma: number; // first-price: spread of the rival-max distribution
   vowelBal: number;   // extra value for a vowel on a vowel-poor rack (or a consonant on a vowel-rich one)
   capMul: number;     // never bid more than capMul x the going price, except in the last 3 auctions
+  muMode: number;     // 0: mu0 * (need/have)^muAlpha; 1: re-solve mu each auction so the
+                      // expected spend over the remaining auctions equals coins + income
+  riskN: number;      // over the last riskN auctions, if projected 5th or 6th within reach,
+  riskUp: number;     // multiply bids by riskUp (rating punishes low finishes most)
+  riskGap: number;    // "within reach": projected gap to 4th place, in points
   lateN: number;      // the last lateN auctions use mu * lateMu (rivals keep a reserve for them)
   lateMu: number;
   bidNoise: number;   // lognormal noise on bids (0 for the real bot; used to diversify sim rivals)
@@ -39,10 +44,10 @@ export interface LalaParams extends ValueParams {
 }
 
 export const DEFAULT_LALA: LalaParams = {
-  winP: 0.6, maxMissing: 3, rho: 1.0, kappa0: 2.5, kappa1: 0.5, dupDecay: 0.6, minLen: 2, maxLen: 8,
+  winP: 0.6, maxMissing: 3, rho: 1.0, kappa0: 2.5, kappa1: 0.5, dupDecay: 0.6, liveUse: 0, minLen: 2, maxLen: 8,
   mu0: 0.25, muAlpha: 1.0, muMin: 0.05, muMax: 1.5, share: 0.2, incomeW: 0.7,
   premium: 1.0, liq: 0.1, playMargin: 0, playK: 1, minPlayLen: 2, kappaT: 15, kappaMin: 0.3,
-  priceN0: 8, shadeSigma: 0.35, vowelBal: 0, capMul: 99, lateN: 12, lateMu: 1, bidNoise: 0, seed: 1,
+  priceN0: 8, shadeSigma: 0.35, vowelBal: 0, capMul: 99, muMode: 0, riskN: 0, riskUp: 1, riskGap: 25, lateN: 12, lateMu: 1, bidNoise: 0, seed: 1,
 };
 
 export interface Decision extends Action {
@@ -83,6 +88,7 @@ export class Lala implements Agent {
   }
 
   private mu(v: View, balance: number, rackValue: number, prices: Float64Array, futureDraws: number): number {
+    if (this.p.muMode === 1) return this.solveMu(v, balance, rackValue, prices, futureDraws);
     const unseen = v.tracker.unseen;
     let tot = 0;
     let avg = 0;
@@ -96,6 +102,51 @@ export class Lala implements Agent {
     let m = this.p.mu0 * Math.pow(need / have, this.p.muAlpha);
     if (futureDraws + 2 <= this.p.lateN) m *= this.p.lateMu;
     return Math.min(this.p.muMax, Math.max(this.p.muMin, m));
+  }
+
+  // Shadow price of coins as the market-clearing mu (Balseiro-Gur pacing,
+  // re-solved rather than stepped because a match is only 68 auctions).
+  // For each letter still to come, our bid is its generic tile value / mu;
+  // the rivals' top bid is lognormal around 1.25x the going price, and we
+  // pay it when it is below ours. Bisect mu so the expected spend over the
+  // remaining auctions matches what we can spend: coins plus the rack's
+  // expected cash-in. With no auctions left mu falls to zero by itself.
+  private solveMu(v: View, balance: number, rackValue: number, prices: Float64Array, futureDraws: number): number {
+    const p = this.p;
+    const unseen = v.tracker.unseen;
+    let tot = 0;
+    for (let k = 0; k < 26; k++) tot += unseen[k]!;
+    if (tot === 0 || futureDraws <= 0) return p.muMin;
+    const budget = Math.max(1, balance + p.incomeW * Math.max(0, rackValue));
+    const s = p.shadeSigma;
+    const ks = this.kappaScale(futureDraws);
+    const spend = (mu: number): number => {
+      let e = 0;
+      for (let k = 0; k < 26; k++) {
+        if (!unseen[k]) continue;
+        const use = p.liveUse ? LIVE_USE[k]! : Math.min(1.6, USEFUL[k]!);
+        const value = (ks * p.kappa0 * use + p.kappa1 * VALUE[k]!) * p.premium;
+        const bid = value / mu;
+        const m = Math.log(Math.max(1, prices[k]! * 1.25));
+        // E[M; M < bid] for lognormal M (partial expectation).
+        const z = (Math.log(bid) - m - s * s) / s;
+        const partial = Math.exp(m + (s * s) / 2) * 0.5 * (1 + erf(z / Math.SQRT2));
+        e += (unseen[k]! / tot) * partial;
+      }
+      return e * (futureDraws + 1);
+    };
+    let lo = p.muMin;
+    let hi = p.muMax;
+    if (spend(lo) <= budget) return lo;
+    if (spend(hi) >= budget) return hi;
+    for (let i = 0; i < 30; i++) {
+      const mid = Math.sqrt(lo * hi);
+      if (spend(mid) > budget) lo = mid;
+      else hi = mid;
+    }
+    let mu = Math.sqrt(lo * hi) * p.mu0 / 0.3;
+    if (futureDraws + 2 <= p.lateN) mu *= p.lateMu;
+    return Math.min(p.muMax, Math.max(p.muMin, mu));
   }
 
   private kappaScale(futureDraws: number): number {
@@ -188,10 +239,28 @@ export class Lala implements Agent {
     if (p.vowelBal > 0) marginal *= this.balanceFactor(rack, v.letter);
     let bid = (marginal / mu) * p.premium;
     if (T > 3) bid = Math.min(bid, p.capMul * prices[v.letter]!);
+    if (T <= p.riskN && marginal > 0 && this.chasingFourth(v, val.base)) bid *= p.riskUp;
     if (p.bidNoise > 0) bid *= Math.exp(p.bidNoise * this.rng.normal());
     if (v.auctionType === "FirstPrice") bid = this.shade(bid, prices[v.letter]!);
     bid = Math.max(0, Math.min(balance, Math.floor(bid)));
     return { words, bid, value: val.base, marginal, mu, ms: performance.now() - t0 };
+  }
+
+  // Projected finish from public data: each rival's score plus ~3 points per
+  // tile they hold (won tiles are public, starting tiles are counted blind).
+  // True when we look 5th or 6th but within riskGap of 4th.
+  private chasingFourth(v: View, rackValue: number): boolean {
+    const mine = v.score + Math.max(0, rackValue);
+    const proj: number[] = [];
+    for (const o of v.tracker.opps.values()) {
+      let held = o.hidden;
+      for (let k = 0; k < 26; k++) held += o.known[k]!;
+      proj.push(o.score + 3 * held);
+    }
+    proj.sort((a, b) => b - a);
+    const ahead = proj.filter((x) => x > mine).length;
+    if (ahead < 4) return false;
+    return proj[3]! - mine <= this.p.riskGap;
   }
 
   // A vowel is worth more to a rack starved of vowels, a consonant to one

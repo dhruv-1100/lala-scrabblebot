@@ -15,3 +15,20 @@ export const TUNED: Partial<LalaParams> = {
 export const LIVELIKE: Partial<LalaParams> = {
   playK: 0.3, minPlayLen: 7, liq: 0.5, bidNoise: 0.25, lateMu: 0.6, mu0: 0.34,
 };
+
+// v2 rival pool, one style per profiled live bot (analysis/topbots.ts, last
+// 900 matches). All value letters with LIVE_USE, so they buy vowels at the
+// live rate (~42%) instead of v1's 30%.
+const RIVAL_BASE: Partial<LalaParams> = { ...LIVELIKE, liveUse: 1, kappa0: 3.5, kappa1: 0.6, mu0: 0.31 };
+export const RIVAL_STYLES: Partial<LalaParams>[] = [
+  // Lambi Lambiii: first word ~round 19, heavy early spend, ends near 0 coins.
+  { ...RIVAL_BASE, premium: 1.15, minPlayLen: 6, playK: 0.25, lateMu: 0.7 },
+  // Chinese Dante: cashes 7-letter words fast, spends early-mid.
+  { ...RIVAL_BASE, premium: 1.05, minPlayLen: 7, playK: 0.3 },
+  // Nijello: patient, first word ~round 42, spends late.
+  { ...RIVAL_BASE, premium: 0.95, minPlayLen: 7, playK: 0.7, lateMu: 0.45 },
+  // postturing: buys the most tiles (14/match).
+  { ...RIVAL_BASE, premium: 1.1, share: 0.27, minPlayLen: 7, playK: 0.4 },
+  // A typical mid-table entrant.
+  { ...RIVAL_BASE, premium: 1.0, bidNoise: 0.35 },
+];

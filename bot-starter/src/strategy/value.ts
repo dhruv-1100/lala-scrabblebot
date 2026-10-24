@@ -15,6 +15,15 @@ import { VALUE, VOWELS } from "../engine/letters.js";
 // How much more often each letter appears in 7-8 letter dictionary words
 // than in the bag (scripts/usefulness.ts). S and C are worth hoarding; Q,
 // J, X and Z rarely fit a long word.
+// Marginal points a bought tile of each letter added to its final word in
+// live play (analysis/report.ts, last 600 matches), divided by 6. Vowels
+// score like 1-point consonants here; the dictionary table above
+// underrates them (O 0.73) because the bag is vowel-heavy, which made
+// v1 buy 30% vowels against 37-44% for the top bots.
+export const LIVE_USE: readonly number[] = [
+  0.95, 1.68, 1.8, 1.37, 0.98, 2.08, 1.28, 2.1, 0.95, 3.18, 2.57, 0.97, 1.73, 0.93, 0.88, 1.7, 3.72, 1.0, 1.08, 0.9, 0.93, 1.97, 2.1, 3.4, 2.22, 3.97,
+];
+
 export const USEFUL: readonly number[] = [
   0.85, 1.08, 1.82, 0.99, 0.97, 0.71, 1, 1.15, 0.87, 0.2, 1.24, 1.38, 1.36, 0.99, 0.73, 1.41, 0.18, 1.2, 2.28, 0.97, 0.88, 0.46, 0.53, 0.29, 0.77, 0.4,
 ];
@@ -26,6 +35,7 @@ export interface ValueParams {
   kappa0: number;      // leftover tile value in points:
   kappa1: number;      //   kappaScale * kappa0 * usefulness + kappa1 * letter value
   dupDecay: number;    // each extra copy of a letter is worth this much less
+  liveUse: number;     // 0: dictionary usefulness table; 1: live-measured LIVE_USE
   minLen: number;      // shortest target word considered
   maxLen: number;
 }
@@ -70,7 +80,8 @@ export class Valuer {
       const lam = unseenTotal > 0 ? (futureDraws * unseen[k]! * p.winP) / unseenTotal : 0;
       poissonTail(lam, this.tail);
       for (let j = 0; j < 6; j++) this.pObt[k * 6 + j] = this.tail[j]!;
-      const one = kMul * (kappaScale * p.kappa0 * Math.min(1.6, USEFUL[k]!) + p.kappa1 * VALUE[k]!);
+      const use = p.liveUse ? LIVE_USE[k]! : Math.min(1.6, USEFUL[k]!);
+      const one = kMul * (kappaScale * p.kappa0 * use + p.kappa1 * VALUE[k]!);
       const decay = VOWELS.has(k) ? p.dupDecay : p.dupDecay * 0.85;
       let c = 0;
       let x = one;

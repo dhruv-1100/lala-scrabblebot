@@ -30,6 +30,7 @@ export interface MatchResult {
   scores: number[];
   balances: number[];
   tilesWon: number[];
+  vowelsWon: number[];
   spent: number[];
   words: string[][];
   unplayed: number[];
@@ -74,6 +75,7 @@ export function runMatch(dict: Dict, agents: Agent[], opts: MatchOptions): Match
   const balance = new Array<number>(n).fill(STARTING_BALANCE);
   const score = new Array<number>(n).fill(0);
   const tilesWon = new Array<number>(n).fill(0);
+  const vowelsWon = new Array<number>(n).fill(0);
   const spent = new Array<number>(n).fill(0);
   const rejected = new Array<number>(n).fill(0);
   const words: string[][] = agents.map(() => []);
@@ -140,6 +142,7 @@ export function runMatch(dict: Dict, agents: Agent[], opts: MatchOptions): Match
         balance[first]! -= paid;
         racks[first]![letter]!++;
         tilesWon[first]!++;
+        if (letter === 0 || letter === 4 || letter === 8 || letter === 14 || letter === 20) vowelsWon[first]!++;
         spent[first]! += paid;
       }
     }
@@ -155,7 +158,7 @@ export function runMatch(dict: Dict, agents: Agent[], opts: MatchOptions): Match
   const places = placesOf(score);
   agents.forEach((a, p) => a.endMatch?.(places[p]!, score));
   return {
-    scores: score, balances: balance, tilesWon, spent, words,
+    scores: score, balances: balance, tilesWon, vowelsWon, spent, words,
     unplayed: racks.map((r) => r.reduce((s, x) => s + x, 0)),
     places, auctions: opts.record ? auctions : undefined, rejected,
   };
