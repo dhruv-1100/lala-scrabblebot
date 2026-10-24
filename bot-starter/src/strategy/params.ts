@@ -14,9 +14,14 @@ export const TUNED: Partial<LalaParams> = {
   // (scripts/train-leave.ts); vowels come out worth more than 1-point
   // consonants. Paired check vs v1.1 (market, n=1000): win +4.6 pts.
   leaveW: 1,
-  // v2.1: retuned around the learned leave table (market field, n=1000 per
-  // trial, same seeds): win 51.7% -> 55.7%, place 1.98 -> 1.76.
-  leaveScale: 0.5, mu0: 0.25, capMul: 1.4, premium: 0.9, lateMu: 0.8,
+  // v2.2: back to v2.0's bidding strength (v2.0 live: 41% wins, place 2.29
+  // over 17 games). v2.1's sim retune bid 10% lower, and live Lala already
+  // loses ~23 auctions per losing game by 0-2 coins; v2.1 live: place 3.17
+  // over 6. Plus the starvation rule: below 15 coins with 8+ auctions left,
+  // cash the best 4+ letter word (live losses showed 30+ rounds starved
+  // while holding a playable 26-27 point word). Sim: neutral (-0.01 +/- 0.016).
+  leaveScale: 0.7, mu0: 0.3, capMul: 1.6, premium: 1.0, lateMu: 0.6,
+  starveBal: 15, starveT: 8,
 };
 
 // Simulated stand-in for strong live entrants (calibrated in ANALYSIS.md):

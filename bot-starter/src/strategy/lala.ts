@@ -25,6 +25,9 @@ export interface LalaParams extends ValueParams {
   premium: number;    // bid multiplier on marginal value
   liq: number;        // bonus per point for cashing a word in early
   playMargin: number; // points a play must beat holding by
+  starveBal: number;  // below this many coins, with starveT+ auctions left, cash the best
+  starveT: number;    // 4+ letter word even if holding might pay more (live: starved
+                      // hoarders lose 15+ auctions in a row; 0 = off)
   playK: number;      // leftover value scale when deciding whether to play
   minPlayLen: number; // shortest word played before the last few auctions
   kappaT: number;     // auctions over which leftover value fades out
@@ -48,7 +51,7 @@ export interface LalaParams extends ValueParams {
 export const DEFAULT_LALA: LalaParams = {
   winP: 0.6, maxMissing: 3, rho: 1.0, kappa0: 2.5, kappa1: 0.5, dupDecay: 0.6, liveUse: 0, vowelUse: 0, leaveW: 0, leaveScale: 1, minLen: 2, maxLen: 8,
   mu0: 0.25, muAlpha: 1.0, muMin: 0.05, muMax: 1.5, share: 0.2, incomeW: 0.7,
-  premium: 1.0, liq: 0.1, playMargin: 0, playK: 1, minPlayLen: 2, kappaT: 15, kappaMin: 0.3,
+  premium: 1.0, liq: 0.1, playMargin: 0, starveBal: 0, starveT: 8, playK: 1, minPlayLen: 2, kappaT: 15, kappaMin: 0.3,
   phasePrices: 0, priceN0: 8, shadeSigma: 0.35, vowelBal: 0, capMul: 99, muMode: 0, riskN: 0, riskUp: 1, riskGap: 25, lateN: 12, lateMu: 1, bidNoise: 0, seed: 1,
 };
 
@@ -227,6 +230,21 @@ export class Lala implements Agent {
           bestGain = gain;
           bestIdx = i;
           bestAfter = after;
+        }
+      }
+      // Starving: coins buy the tiles that win, and live matches showed
+      // Lala holding a 26-27 point word for 30+ rounds with no coins.
+      if (bestIdx < 0 && balance < p.starveBal && futureDraws >= p.starveT) {
+        let bestTotal = -Infinity;
+        for (const i of cands) {
+          if (this.dict.len[i]! < 4) continue;
+          const after = evalRack(removeWord(rack, this.dict.words[i]!), mu, p.playK);
+          const total = this.dict.reward[i]! + after.base;
+          if (total > bestTotal) {
+            bestTotal = total;
+            bestIdx = i;
+            bestAfter = after;
+          }
         }
       }
       if (bestIdx < 0) break;
