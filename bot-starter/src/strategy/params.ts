@@ -2,7 +2,7 @@
 import type { LalaParams } from "./lala.js";
 
 // Logged by the live bot so live results can be credited to a version.
-export const VERSION = "v2.4";
+export const VERSION = "v2.5";
 
 export const TUNED: Partial<LalaParams> = {
   muAlpha: 0.6, kappa0: 3.5, winP: 0.9, dupDecay: 0.8, kappa1: 1, maxMissing: 2,
@@ -25,6 +25,13 @@ export const TUNED: Partial<LalaParams> = {
   // against weaker best rivals (101 vs 109). Both rules are off.
   leaveScale: 0.7, mu0: 0.3, capMul: 1.6, premium: 1.0, lateMu: 0.6,
   starveBal: 0,
+  // v2.5: learned from the top bots (analysis/reverse.ts, last 1200 matches).
+  // They pay 1.2-1.42x the going price for a letter that completes a word
+  // within a round (vs 1.18-1.24x for other letters); v2 paid 1.18x vs 1.20x.
+  // Bid at least 1.4x the price when the letter completes a 6+ letter word
+  // worth 12+ more points. Paired sim (market, n=1200): place -0.128 +/- 0.081,
+  // score +2.1 +/- 1.1, rating value +0.054 +/- 0.036. Decisions <= 25 ms.
+  completeMul: 1.4, completeMin: 12, completeLen: 6,
 };
 
 // Simulated stand-in for strong live entrants (calibrated in ANALYSIS.md):

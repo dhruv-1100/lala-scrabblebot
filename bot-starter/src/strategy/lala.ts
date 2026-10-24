@@ -35,6 +35,9 @@ export interface LalaParams extends ValueParams {
   phasePrices: number; // 1: price prior follows the live stage curve (tables.ts)
   priceN0: number;    // prior weight (in observations) on the price table
   shadeSigma: number; // first-price: spread of the rival-max distribution
+  completeMul: number; // bid at least completeMul x the going price for a letter that
+  completeMin: number; // completes a completeLen+ letter word worth completeMin+ more points
+  completeLen: number; // than the best word now (top bots pay 1.2-1.4x for these; v2 paid 1.18x)
   vowelBal: number;   // extra value for a vowel on a vowel-poor rack (or a consonant on a vowel-rich one)
   capMul: number;     // never bid more than capMul x the going price, except in the last 3 auctions
   muMode: number;     // 0: mu0 * (need/have)^muAlpha; 1: re-solve mu each auction so the
@@ -52,7 +55,7 @@ export const DEFAULT_LALA: LalaParams = {
   winP: 0.6, maxMissing: 3, rho: 1.0, kappa0: 2.5, kappa1: 0.5, dupDecay: 0.6, liveUse: 0, vowelUse: 0, leaveW: 0, leaveScale: 1, minLen: 2, maxLen: 8,
   mu0: 0.25, muAlpha: 1.0, muMin: 0.05, muMax: 1.5, share: 0.2, incomeW: 0.7,
   premium: 1.0, liq: 0.1, playMargin: 0, starveBal: 0, starveT: 8, playK: 1, minPlayLen: 2, kappaT: 15, kappaMin: 0.3,
-  phasePrices: 0, priceN0: 8, shadeSigma: 0.35, vowelBal: 0, capMul: 99, muMode: 0, riskN: 0, riskUp: 1, riskGap: 25, lateN: 12, lateMu: 1, bidNoise: 0, seed: 1,
+  phasePrices: 0, priceN0: 8, shadeSigma: 0.35, completeMul: 0, completeMin: 12, completeLen: 6, vowelBal: 0, capMul: 99, muMode: 0, riskN: 0, riskUp: 1, riskGap: 25, lateN: 12, lateMu: 1, bidNoise: 0, seed: 1,
 };
 
 export interface Decision extends Action {
@@ -261,11 +264,28 @@ export class Lala implements Agent {
     if (p.vowelBal > 0) marginal *= this.balanceFactor(rack, v.letter);
     let bid = (marginal / mu) * p.premium;
     if (T > 3) bid = Math.min(bid, p.capMul * prices[v.letter]!);
+    // Finishing a word now is worth more than the letter's average value:
+    // the points are certain and the coins come back for the next buy.
+    if (p.completeMul > 0) {
+      const gain = this.completionGain(rack, v.letter, p.completeLen);
+      if (gain >= p.completeMin) bid = Math.max(bid, p.completeMul * prices[v.letter]!);
+    }
     if (T <= p.riskN && marginal > 0 && this.chasingFourth(v, val.base)) bid *= p.riskUp;
     if (p.bidNoise > 0) bid *= Math.exp(p.bidNoise * this.rng.normal());
     if (v.auctionType === "FirstPrice") bid = this.shade(bid, prices[v.letter]!);
     bid = Math.max(0, Math.min(balance, Math.floor(bid)));
     return { words, bid, value: val.base, marginal, mu, ms: performance.now() - t0 };
+  }
+
+  // Points the best word of at least minLen letters gains if we add `letter`.
+  private completionGain(rack: Counts, letter: number, minLen: number): number {
+    const best = (r: Counts): number => {
+      const i = playable(this.dict, r, minLen, 1)[0];
+      return i === undefined ? 0 : this.dict.reward[i]!;
+    };
+    const plus = new Uint8Array(rack);
+    plus[letter]!++;
+    return best(plus) - best(rack);
   }
 
   // Projected finish from public data: each rival's score plus ~3 points per
