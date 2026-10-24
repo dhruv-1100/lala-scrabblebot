@@ -213,3 +213,20 @@ Last-place games: 7.5 tiles bought, 66 coins unspent at round 20, first word at 
 i.e. timid early, not broke. Two of the 11 were infrastructure (a stalled socket, an outside
 restart). Every simulated fix for the timid starts (pacing, coin value, high-value boost)
 made things worse, so v2.5.1 keeps the v2.5 strategy and only adds the watchdog.
+
+## 12. Learning from real matches (v2.6, v2.6.1)
+
+Checked first: the new docs site (launchpad-scrabblebot.vercel.app/docs) points at the same
+database and repeats the old rules text; the upstream repo has no commits since our clone, so
+the simulator still matches the server.
+
+**Real-game leave table (v2.6).** Racks rebuilt for every bot in 2,500 live matches (won tiles,
+plus starting tiles revealed by later words): 190k snapshots, future score regressed on rack
+contents (R² 0.66-0.75). Real racks are worth ~40% more per tile than simulated ones; vowels
+again score at or above 1-point consonants; most high-value letters are worth less relative
+to an A than the simulation says (Z 3.5x vs 4.1x). Paired sim vs v2.5.1 by scale: 0.4 slightly
+worse, **0.5 win +4.0 +/- 3.2 pts, place -0.117 +/- 0.072**, 0.6 much worse (+0.46).
+
+**Recent prices (v2.6.1).** Refit on the latest 900 matches: high-value letters 2-5 coins
+cheaper mid/late (mid Z 40 -> 35, late Q 23 -> 18), 1-point letters unchanged. Sim neutral
+(its market bots still price from the old table), shipped because the live market moved.
