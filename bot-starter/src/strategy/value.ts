@@ -40,6 +40,7 @@ export interface ValueParams {
   leaveCapN: number;   // >0: past this many leftover tiles, leftover value scales by capN/n
                        // (additive leave values made 13-tile racks look worth ~65 points)
   leaveW: number;      // 0..1: share of leftover value taken from the learned leave table
+  leaveLive: number;   // 1: use the table fitted to real matches instead of simulated ones
   leaveScale: number;  // points of table value per point of leftover value
   vowelUse: number;    // >0: usefulness of A/E/I/O/U in the dictionary table (it rates them 0.73-0.97)
   minLen: number;      // shortest target word considered
@@ -102,7 +103,7 @@ export class Valuer {
         // Replace the hand-built leftover value by the learned one: the
         // value of holding j copies, as fitted to simulated outcomes.
         for (let j = 1; j < 8; j++) {
-          const learned = Math.max(0, leaveValue(futureDraws + 2, k, j)) * p.leaveScale * kMul;
+          const learned = Math.max(0, leaveValue(futureDraws + 2, k, j, p.leaveLive === 1)) * p.leaveScale * kMul;
           this.cumK[k * 8 + j] = (1 - p.leaveW) * this.cumK[k * 8 + j]! + p.leaveW * learned;
         }
       }

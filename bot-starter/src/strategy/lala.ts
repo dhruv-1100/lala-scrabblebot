@@ -65,7 +65,7 @@ export interface LalaParams extends ValueParams {
 }
 
 export const DEFAULT_LALA: LalaParams = {
-  winP: 0.6, maxMissing: 3, rho: 1.0, kappa0: 2.5, kappa1: 0.5, dupDecay: 0.6, liveUse: 0, vowelUse: 0, leaveCapN: 0, leaveW: 0, leaveScale: 1, minLen: 2, maxLen: 8,
+  winP: 0.6, maxMissing: 3, rho: 1.0, kappa0: 2.5, kappa1: 0.5, dupDecay: 0.6, liveUse: 0, vowelUse: 0, leaveCapN: 0, leaveW: 0, leaveLive: 0, leaveScale: 1, minLen: 2, maxLen: 8,
   mu0: 0.25, muAlpha: 1.0, muMin: 0.05, muMax: 1.5, share: 0.2, incomeW: 0.7,
   premium: 1.0, liq: 0.1, playMargin: 0, coinW: 0, affordK: 0, starveBal: 0, starveT: 8, playK: 1, minPlayLen: 2, kappaT: 15, kappaMin: 0.3,
   phasePrices: 0, priceN0: 8, shadeSigma: 0.35, paceRate: 0, paceK: 0.1, paceMax: 1.4, hiBoost: 0, completeMul: 0, completeMin: 12, completeLen: 6, vowelBal: 0, capMul: 99, muMode: 0, riskN: 0, riskUp: 1, riskGap: 25, lateN: 12, lateMu: 1, bidNoise: 0, seed: 1,

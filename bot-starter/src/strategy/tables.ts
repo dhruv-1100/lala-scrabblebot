@@ -27,15 +27,18 @@ export interface PhasePrices {
 }
 
 export const LEAVE: LeaveTable | null = readJson<LeaveTable>("leave-table.json");
+// The same model fitted to real matches (scripts/train-leave-live.ts).
+export const LEAVE_LIVE: LeaveTable | null = readJson<LeaveTable>("leave-table-live.json");
 export const PHASE: PhasePrices | null = readJson<PhasePrices>("phase-prices.json");
 
 // Cumulative leave value (points) of holding `copies` of letter k when
 // `T` auctions are left. Copies past the third are worth half the third.
-export function leaveValue(T: number, k: number, copies: number): number {
-  if (!LEAVE || copies <= 0) return 0;
-  let b = LEAVE.buckets.findIndex(([lo, hi]) => T >= lo && T <= hi);
-  if (b < 0) b = T > 40 ? 0 : LEAVE.buckets.length - 1;
-  const t = LEAVE.table[b]![k]!;
+export function leaveValue(T: number, k: number, copies: number, live = false): number {
+  const L = live && LEAVE_LIVE ? LEAVE_LIVE : LEAVE;
+  if (!L || copies <= 0) return 0;
+  let b = L.buckets.findIndex(([lo, hi]) => T >= lo && T <= hi);
+  if (b < 0) b = T > 40 ? 0 : L.buckets.length - 1;
+  const t = L.table[b]![k]!;
   let v = 0;
   for (let j = 1; j <= Math.min(copies, 3); j++) v += t[j - 1]!;
   if (copies > 3) v += (copies - 3) * 0.5 * t[2]!;

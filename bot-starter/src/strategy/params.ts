@@ -2,7 +2,7 @@
 import type { LalaParams } from "./lala.js";
 
 // Logged by the live bot so live results can be credited to a version.
-export const VERSION = "v2.5.1";
+export const VERSION = "v2.6";
 
 export const TUNED: Partial<LalaParams> = {
   muAlpha: 0.6, kappa0: 3.5, winP: 0.9, dupDecay: 0.8, kappa1: 1, maxMissing: 2,
@@ -23,7 +23,7 @@ export const TUNED: Partial<LalaParams> = {
   // 11 games, place 3.45, score 68. The starvation rule cashes 5-6 letter words
   // at 2-2.5x instead of building 7+ at 3x, and v2.2's own score fell 22 points
   // against weaker best rivals (101 vs 109). Both rules are off.
-  leaveScale: 0.7, mu0: 0.3, capMul: 1.6, premium: 1.0, lateMu: 0.6,
+  mu0: 0.3, capMul: 1.6, premium: 1.0, lateMu: 0.6,
   starveBal: 0,
   // v2.5: learned from the top bots (analysis/reverse.ts, last 1200 matches).
   // They pay 1.2-1.42x the going price for a letter that completes a word
@@ -32,6 +32,11 @@ export const TUNED: Partial<LalaParams> = {
   // worth 12+ more points. Paired sim (market, n=1200): place -0.128 +/- 0.081,
   // score +2.1 +/- 1.1, rating value +0.054 +/- 0.036. Decisions <= 25 ms.
   completeMul: 1.4, completeMin: 12, completeLen: 6,
+  // v2.6: leave values fitted to 2,500 real matches (190k rack snapshots,
+  // scripts/train-leave-live.ts) instead of simulated ones; real racks are
+  // worth ~40% more per tile, so the scale drops to 0.5. Paired sim (market,
+  // n=1200) vs v2.5.1: win +4.0 +/- 3.2 pts, place -0.117 +/- 0.072, score +2.4.
+  leaveLive: 1, leaveScale: 0.5,
 };
 
 // Simulated stand-in for strong live entrants (calibrated in ANALYSIS.md):
