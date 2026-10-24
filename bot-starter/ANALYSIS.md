@@ -136,3 +136,20 @@ live rivals score more than the simulated ones (best rival 106 vs ~98). The live
 in Lala's matches play their first word at round ~28 (Lala ~38) and spend ~195 coins
 (Lala ~164) on ~14 tiles (Lala ~12.5). Earlier play does not help Lala in any simulated
 field, so this is the main open question for v2.
+
+## 8. v2.3: bid the model's value
+
+The module is a Vickrey auction (`game.ts`: winner pays the runner-up, or
+`AUCTION_RESERVE` (1) if they are the only bidder). A bid above balance is
+rejected. Unsold tiles are discarded, not returned to the bag. The simulator
+and the live bot already follow that. The public docs disagree on the bag and
+on a 60-second lobby (`LOBBY_DURATION_SECONDS` is 90); the bot follows the module.
+
+`lateMu` 0.6 cut the shadow price of coins for the last 12 auctions, which
+raises the bid to 1.67× what `marginal / mu` says the letter is worth. In the
+v2 live log, once 8 auctions remain the bid equals the balance on about 70% of
+auctions, so a mediocre letter and a finishing letter cost the same coins.
+v2.3 sets `lateMu` to 1. The horizon term in `mu()` still spends coins that
+will be worthless. Paired n=500 against v2.2: on the pop field (Lambi, Dante,
+Nijello, postturing styles) place −0.056 ± 0.052 and score +1.6 ± 0.5; on
+live-like rivals score +0.9 ± 0.5 and place unchanged.

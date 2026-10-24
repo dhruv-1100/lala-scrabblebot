@@ -20,7 +20,13 @@ export const TUNED: Partial<LalaParams> = {
   // over 6. Plus the starvation rule: below 15 coins with 8+ auctions left,
   // cash the best 4+ letter word (live losses showed 30+ rounds starved
   // while holding a playable 26-27 point word). Sim: neutral (-0.01 +/- 0.016).
-  leaveScale: 0.7, mu0: 0.3, capMul: 1.6, premium: 1.0, lateMu: 0.6,
+  // v2.3: Vickrey bids are marginal value / mu. lateMu 0.6 multiplied mu
+  // down for the last 12 auctions, so those bids were 1.67x the model's own
+  // value. Live v2 logs: from 8 auctions left, bid == balance on ~70% of
+  // auctions. lateMu 1 leaves the horizon term in mu() to spend leftover
+  // coins. Paired n=500 vs v2.2: pop place -0.056 +/- 0.052, score +1.6 +/-
+  // 0.5; live-like score +0.9 +/- 0.5, place flat.
+  leaveScale: 0.7, mu0: 0.3, capMul: 1.6, premium: 1.0, lateMu: 1,
   starveBal: 15, starveT: 8,
 };
 
