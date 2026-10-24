@@ -197,3 +197,19 @@ place -0.128 +/- 0.081, score +2.1 +/- 1.1. 1.55x was slightly worse (place -0.1
 
 Not yet acted on: the top bots' 7+ words use higher-value letters (2.05-2.22 points per
 letter vs 1.94) and they turn tiles over faster (7-11 rounds vs 13).
+
+## 11. Later experiments (v2.5 -> v2.5.1)
+
+| Idea | Evidence | Result |
+|---|---|---|
+| Boost 4+ point letters (top bots buy 2.2-2.8 per match, Lala 1.87) | paired sim, market n=1200: place +0.132 +/- 0.071 at 1.15x | rejected |
+| Value coins from plays at the leave table's own points-per-coin | paired sim: place +0.751, score -13.9 | rejected (agrees with v2.2's live score drop) |
+| Diminishing returns for racks over 7 leftover tiles; affordability-scaled win chance | changed no decisions in the broke-rack cases; not shipped | parked |
+| Tile pacing (raise bids when behind 0.22 tiles/auction) | paired sim: place +0.075 +/- 0.050 | rejected |
+| Stall watchdog: rebuild the connection after 5 s without an auction mid-match | match 3967 stalled ~70 s and scored 0 | shipped in v2.5.1 |
+
+v2 overall (97 live games to 20:40): 24% wins (v1 13%) but 11% last places (v1 3%).
+Last-place games: 7.5 tiles bought, 66 coins unspent at round 20, first word at round 58,
+i.e. timid early, not broke. Two of the 11 were infrastructure (a stalled socket, an outside
+restart). Every simulated fix for the timid starts (pacing, coin value, high-value boost)
+made things worse, so v2.5.1 keeps the v2.5 strategy and only adds the watchdog.
