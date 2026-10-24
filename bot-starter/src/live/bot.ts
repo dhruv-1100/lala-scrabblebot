@@ -43,7 +43,12 @@ const AB_ON = Object.keys(VARIANT_B).length > 0 && process.env.AB !== "0";
 const paramsB: Partial<LalaParams> = { ...params, ...VARIANT_B };
 const lalaB = new Lala(dict, paramsB, `${BOT_NAME}-B`);
 function arm(matchId: bigint): "A" | "B" {
-  return AB_ON && ((Math.imul(Number(matchId % 4294967296n), 2654435761) >>> 16) & 1) === 1 ? "B" : "A";
+  // murmur3 finaliser: a well-mixed bit even when ids step by a constant.
+  let h = Number(matchId % 4294967296n) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  h ^= h >>> 16;
+  return AB_ON && (h & 1) === 1 ? "B" : "A";
 }
 
 // ---------- logging ----------
