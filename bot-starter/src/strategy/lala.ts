@@ -11,6 +11,7 @@ import { VALUE, VOWELS, type Counts } from "../engine/letters.js";
 import { bestPartition, playable, removeWord } from "../engine/words.js";
 import type { Action, Agent, View } from "../sim/types.js";
 import { Valuer, LIVE_USE, USEFUL, type ValueParams } from "./value.js";
+import { phasePrice } from "./tables.js";
 import { LIVE_PAID } from "../sim/agents.js";
 import { Rng } from "../engine/rng.js";
 
@@ -28,6 +29,7 @@ export interface LalaParams extends ValueParams {
   minPlayLen: number; // shortest word played before the last few auctions
   kappaT: number;     // auctions over which leftover value fades out
   kappaMin: number;
+  phasePrices: number; // 1: price prior follows the live stage curve (tables.ts)
   priceN0: number;    // prior weight (in observations) on the price table
   shadeSigma: number; // first-price: spread of the rival-max distribution
   vowelBal: number;   // extra value for a vowel on a vowel-poor rack (or a consonant on a vowel-rich one)
@@ -44,10 +46,10 @@ export interface LalaParams extends ValueParams {
 }
 
 export const DEFAULT_LALA: LalaParams = {
-  winP: 0.6, maxMissing: 3, rho: 1.0, kappa0: 2.5, kappa1: 0.5, dupDecay: 0.6, liveUse: 0, minLen: 2, maxLen: 8,
+  winP: 0.6, maxMissing: 3, rho: 1.0, kappa0: 2.5, kappa1: 0.5, dupDecay: 0.6, liveUse: 0, vowelUse: 0, leaveW: 0, leaveScale: 1, minLen: 2, maxLen: 8,
   mu0: 0.25, muAlpha: 1.0, muMin: 0.05, muMax: 1.5, share: 0.2, incomeW: 0.7,
   premium: 1.0, liq: 0.1, playMargin: 0, playK: 1, minPlayLen: 2, kappaT: 15, kappaMin: 0.3,
-  priceN0: 8, shadeSigma: 0.35, vowelBal: 0, capMul: 99, muMode: 0, riskN: 0, riskUp: 1, riskGap: 25, lateN: 12, lateMu: 1, bidNoise: 0, seed: 1,
+  phasePrices: 0, priceN0: 8, shadeSigma: 0.35, vowelBal: 0, capMul: 99, muMode: 0, riskN: 0, riskUp: 1, riskGap: 25, lateN: 12, lateMu: 1, bidNoise: 0, seed: 1,
 };
 
 export interface Decision extends Action {
@@ -74,16 +76,18 @@ export class Lala implements Agent {
   // Expected coins per letter: the live price table scaled by how this
   // match's prices compare with it so far.
   prices(v: View): Float64Array {
+    const prior = (round: number, k: number): number =>
+      (this.p.phasePrices ? phasePrice(round, k) : null) ?? LIVE_PAID[k]!;
     let sum = 0;
     let n = 0;
     for (const o of v.tracker.prices) {
       if (o.winner === null || o.paid <= 0) continue;
-      sum += o.paid / LIVE_PAID[o.letter]!;
+      sum += o.paid / prior(o.round, o.letter);
       n++;
     }
     const scale = (sum + this.p.priceN0) / (n + this.p.priceN0);
     const out = new Float64Array(26);
-    for (let k = 0; k < 26; k++) out[k] = Math.max(1, LIVE_PAID[k]! * scale);
+    for (let k = 0; k < 26; k++) out[k] = Math.max(1, prior(v.round, k) * scale);
     return out;
   }
 
@@ -124,7 +128,7 @@ export class Lala implements Agent {
       let e = 0;
       for (let k = 0; k < 26; k++) {
         if (!unseen[k]) continue;
-        const use = p.liveUse ? LIVE_USE[k]! : Math.min(1.6, USEFUL[k]!);
+        const use = p.liveUse ? LIVE_USE[k]! : p.vowelUse > 0 && VOWELS.has(k) ? p.vowelUse : Math.min(1.6, USEFUL[k]!);
         const value = (ks * p.kappa0 * use + p.kappa1 * VALUE[k]!) * p.premium;
         const bid = value / mu;
         const m = Math.log(Math.max(1, prices[k]! * 1.25));

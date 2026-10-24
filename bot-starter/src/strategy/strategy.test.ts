@@ -63,3 +63,21 @@ test("simulated match conserves tiles and never submits an illegal action", () =
     assert.equal(r.auctions!.length, 98 - 30);
   }
 });
+
+test("v2 values a vowel at least as much as a 1-point consonant on a consonant-heavy rack", () => {
+  const v2 = { ...TUNED, liveUse: 1, kappa1: 0.5, capMul: 1.25 };
+  const lala = new Lala(dict, v2);
+  const vowel = lala.act(view("BCNRTS", "E", 40, 100));
+  const cons = lala.act(view("BCNRTS", "L", 40, 100));
+  assert.ok(vowel.bid >= cons.bid, `E ${vowel.bid} < L ${cons.bid}`);
+});
+
+test("v2 never bids above 1.25x the going price before the last 3 auctions", () => {
+  const v2 = { ...TUNED, liveUse: 1, kappa1: 0.5, capMul: 1.25 };
+  const lala = new Lala(dict, v2);
+  for (const [r, l] of [["ETAINS", "R"], ["QUIXOT", "E"], ["ZAXJ", "Q"]] as const) {
+    const d = lala.act(view(r, l, 30, 200));
+    const price = lala.prices(view(r, l, 30, 200))[l.charCodeAt(0) - 65]!;
+    assert.ok(d.bid <= Math.floor(1.25 * price) + 1, `${r}+${l}: bid ${d.bid} price ${price}`);
+  }
+});

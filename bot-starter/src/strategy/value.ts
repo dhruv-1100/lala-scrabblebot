@@ -11,6 +11,7 @@
 
 import type { Dict } from "../engine/dict.js";
 import { VALUE, VOWELS } from "../engine/letters.js";
+import { leaveValue } from "./tables.js";
 
 // How much more often each letter appears in 7-8 letter dictionary words
 // than in the bag (scripts/usefulness.ts). S and C are worth hoarding; Q,
@@ -36,6 +37,9 @@ export interface ValueParams {
   kappa1: number;      //   kappaScale * kappa0 * usefulness + kappa1 * letter value
   dupDecay: number;    // each extra copy of a letter is worth this much less
   liveUse: number;     // 0: dictionary usefulness table; 1: live-measured LIVE_USE
+  leaveW: number;      // 0..1: share of leftover value taken from the learned leave table
+  leaveScale: number;  // points of table value per point of leftover value
+  vowelUse: number;    // >0: usefulness of A/E/I/O/U in the dictionary table (it rates them 0.73-0.97)
   minLen: number;      // shortest target word considered
   maxLen: number;
 }
@@ -80,7 +84,7 @@ export class Valuer {
       const lam = unseenTotal > 0 ? (futureDraws * unseen[k]! * p.winP) / unseenTotal : 0;
       poissonTail(lam, this.tail);
       for (let j = 0; j < 6; j++) this.pObt[k * 6 + j] = this.tail[j]!;
-      const use = p.liveUse ? LIVE_USE[k]! : Math.min(1.6, USEFUL[k]!);
+      const use = p.liveUse ? LIVE_USE[k]! : p.vowelUse > 0 && VOWELS.has(k) ? p.vowelUse : Math.min(1.6, USEFUL[k]!);
       const one = kMul * (kappaScale * p.kappa0 * use + p.kappa1 * VALUE[k]!);
       const decay = VOWELS.has(k) ? p.dupDecay : p.dupDecay * 0.85;
       let c = 0;
@@ -92,6 +96,14 @@ export class Valuer {
         this.cumK[k * 8 + j] = c;
       }
       this.costW[k] = mu * p.rho * prices[k]!;
+      if (p.leaveW > 0) {
+        // Replace the hand-built leftover value by the learned one: the
+        // value of holding j copies, as fitted to simulated outcomes.
+        for (let j = 1; j < 8; j++) {
+          const learned = Math.max(0, leaveValue(futureDraws + 2, k, j)) * p.leaveScale * kMul;
+          this.cumK[k * 8 + j] = (1 - p.leaveW) * this.cumK[k * 8 + j]! + p.leaveW * learned;
+        }
+      }
     }
     const cumK = this.cumK;
     const ck = (k: number, j: number) => cumK[k * 8 + (j > 7 ? 7 : j)]!;

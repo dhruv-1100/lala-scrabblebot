@@ -8,6 +8,14 @@ export const TUNED: Partial<LalaParams> = {
   // 1.6x the going price before the last 3 (paired sim vs live-like rivals,
   // n=1000: place -0.148 +/- 0.053).
   lateMu: 0.6, capMul: 1.6,
+  // v2.0a: vowels valued like 1-point consonants (v1 bought 30% vowels vs
+  // 37-44% for the top bots) and a price prior that follows the live stage
+  // curve (high-value letters get cheaper late).
+  vowelUse: 1.0, phasePrices: 1,
+  // v2.0: leftover tile values learned from 218k simulated positions
+  // (scripts/train-leave.ts); vowels come out worth more than 1-point
+  // consonants. Paired check vs v1.1 (market, n=1000): win +4.6 pts.
+  leaveW: 1, leaveScale: 0.7,
 };
 
 // Simulated stand-in for strong live entrants (calibrated in ANALYSIS.md):
