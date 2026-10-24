@@ -2,7 +2,7 @@
 import type { LalaParams } from "./lala.js";
 
 // Logged by the live bot so live results can be credited to a version.
-export const VERSION = "v2.6.1";
+export const VERSION = "v2.7";
 
 export const TUNED: Partial<LalaParams> = {
   muAlpha: 0.6, kappa0: 3.5, winP: 0.9, dupDecay: 0.8, kappa1: 1, maxMissing: 2,
@@ -32,16 +32,11 @@ export const TUNED: Partial<LalaParams> = {
   // worth 12+ more points. Paired sim (market, n=1200): place -0.128 +/- 0.081,
   // score +2.1 +/- 1.1, rating value +0.054 +/- 0.036. Decisions <= 25 ms.
   completeMul: 1.4, completeMin: 12, completeLen: 6,
-  // v2.6: leave values fitted to 2,500 real matches (190k rack snapshots,
-  // scripts/train-leave-live.ts) instead of simulated ones; real racks are
-  // worth ~40% more per tile, so the scale drops to 0.5. Paired sim (market,
-  // n=1200) vs v2.5.1: win +4.0 +/- 3.2 pts, place -0.117 +/- 0.072, score +2.4.
-  leaveLive: 1, leaveScale: 0.5,
-  // v2.6.1: stage price prior refit on the latest 900 matches; high-value
-  // letters got 2-5 coins cheaper mid/late game (mid Z 40 -> 35, late Q
-  // 23 -> 18), 1-point letters unchanged. Sim neutral (its market bots still
-  // price from the old table): place +0.019 +/- 0.052.
-  phasePrices: 2,
+  // v2.7: back to the v2.5.1 settings. Live: v2.5.1 23 games, place 2.57,
+  // 26% wins; v2.6 + v2.6.1 (real-game leave table, recent prices) 12 games,
+  // place ~3.2, rating 2031 -> 1929. The real-game table won in simulation but
+  // not live; it was fitted to every bot's racks, weak bots included.
+  leaveLive: 0, leaveScale: 0.7, phasePrices: 1,
 };
 
 // Simulated stand-in for strong live entrants (calibrated in ANALYSIS.md):
