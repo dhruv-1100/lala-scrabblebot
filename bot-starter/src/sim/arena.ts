@@ -13,11 +13,11 @@ import { loadDict } from "../engine/dict.js";
 import { runMatch } from "./sim.js";
 import { MarketBot, SimBot, StarterBot, DEFAULT_MARKET, type MarketParams } from "./agents.js";
 import { Lala, type LalaParams } from "../strategy/lala.js";
-import { TUNED } from "../strategy/params.js";
+import { TUNED, LIVELIKE } from "../strategy/params.js";
 import type { Agent } from "./types.js";
 import type { AuctionType } from "../engine/tracker.js";
 
-export type FieldName = "market" | "sims" | "starter" | "self" | "mixed" | "lalamix";
+export type FieldName = "market" | "sims" | "starter" | "self" | "mixed" | "lalamix" | "livelike" | "blend";
 
 export interface Job {
   field: FieldName;
@@ -58,6 +58,14 @@ function field(dict: ReturnType<typeof loadDict>, job: Job, seed: number): Agent
         return new Lala(dict, { ...TUNED, ...job.fieldParams }, `lala-f${i}`);
       case "mixed":
         return i % 2 === 0 ? new MarketBot(dict, s, { ...DEFAULT_MARKET, ...job.market }) : new Lala(dict, { ...TUNED, ...job.fieldParams }, `lala-f${i}`);
+      case "livelike":
+        // Live-like rivals: cash 7-letter words early, noisy bids.
+        return new Lala(dict, { ...TUNED, ...LIVELIKE, ...job.fieldParams, seed: s }, `live-${i}`);
+      case "blend":
+        // Two market bots and three live-like rivals.
+        return i < 2
+          ? new MarketBot(dict, s, { ...DEFAULT_MARKET, ...job.market })
+          : new Lala(dict, { ...TUNED, ...LIVELIKE, ...job.fieldParams, seed: s }, `live-${i}`);
       case "lalamix": {
         // Lala variants with perturbed parameters stand in for strong rivals.
         const base = { ...TUNED, ...job.fieldParams };

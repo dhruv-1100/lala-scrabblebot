@@ -7,3 +7,5 @@ data/live/
 data/stream/
 data/*.log
 logs/
+# Restart signal for the live bot.
+.drain

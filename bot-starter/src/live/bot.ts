@@ -28,6 +28,9 @@ const DRY_RUN = process.env.DRY_RUN === "1";
 const NO_LOBBY = process.env.NO_LOBBY === "1";
 const ROOT = process.cwd();
 const TOKEN_PATH = path.join(ROOT, `.token-${BOT_NAME}`);
+// `touch .drain` to restart without losing auctions: the bot finishes its
+// current match, doesn't rejoin the lobby, and exits (pm2 restarts it).
+const DRAIN_PATH = path.join(ROOT, ".drain");
 const LOG_DIR = path.resolve(process.env.LOG_DIR ?? path.join(ROOT, "data", "live"));
 fs.mkdirSync(LOG_DIR, { recursive: true });
 
@@ -222,6 +225,11 @@ function maybeJoinLobby(force = false): void {
   const c = conn;
   if (!c || myBotId === null || DRY_RUN || NO_LOBBY) return;
   if (myRunningMatches(c).length > 0 || inOpenLobby(c) || heldForTournament(c)) return;
+  if (fs.existsSync(DRAIN_PATH)) {
+    fs.rmSync(DRAIN_PATH, { force: true });
+    log("drain requested: between matches, exiting for restart");
+    process.exit(0);
+  }
   if (!force && Date.now() - lastLobbyJoin < 10_000) return;
   lastLobbyJoin = Date.now();
   log("joining lobby");
