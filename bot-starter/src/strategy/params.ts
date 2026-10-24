@@ -1,6 +1,9 @@
 // The parameter set the live bot plays with. Arena-tuned; see ANALYSIS.md.
 import type { LalaParams } from "./lala.js";
 
+// Logged by the live bot so live results can be credited to a version.
+export const VERSION = "v2.4";
+
 export const TUNED: Partial<LalaParams> = {
   muAlpha: 0.6, kappa0: 3.5, winP: 0.9, dupDecay: 0.8, kappa1: 1, maxMissing: 2,
   liq: 0, share: 0.2, incomeW: 0.3, rho: 0.6,
@@ -14,20 +17,14 @@ export const TUNED: Partial<LalaParams> = {
   // (scripts/train-leave.ts); vowels come out worth more than 1-point
   // consonants. Paired check vs v1.1 (market, n=1000): win +4.6 pts.
   leaveW: 1,
-  // v2.2: back to v2.0's bidding strength (v2.0 live: 41% wins, place 2.29
-  // over 17 games). v2.1's sim retune bid 10% lower, and live Lala already
-  // loses ~23 auctions per losing game by 0-2 coins; v2.1 live: place 3.17
-  // over 6. Plus the starvation rule: below 15 coins with 8+ auctions left,
-  // cash the best 4+ letter word (live losses showed 30+ rounds starved
-  // while holding a playable 26-27 point word). Sim: neutral (-0.01 +/- 0.016).
-  // v2.3: Vickrey bids are marginal value / mu. lateMu 0.6 multiplied mu
-  // down for the last 12 auctions, so those bids were 1.67x the model's own
-  // value. Live v2 logs: from 8 auctions left, bid == balance on ~70% of
-  // auctions. lateMu 1 leaves the horizon term in mu() to spend leftover
-  // coins. Paired n=500 vs v2.2: pop place -0.056 +/- 0.052, score +1.6 +/-
-  // 0.5; live-like score +0.9 +/- 0.5, place flat.
-  leaveScale: 0.7, mu0: 0.3, capMul: 1.6, premium: 1.0, lateMu: 1,
-  starveBal: 15, starveT: 8,
+  // v2.4: back to the v2.0 settings, its best live version. Live by version
+  // (analysis/versions.ts): v2.0 17 games, 41% wins, place 2.29, score 103;
+  // v2.2 (+ starvation cash-in) 38 games, place 2.97, score 81; v2.3 (+ lateMu 1)
+  // 11 games, place 3.45, score 68. The starvation rule cashes 5-6 letter words
+  // at 2-2.5x instead of building 7+ at 3x, and v2.2's own score fell 22 points
+  // against weaker best rivals (101 vs 109). Both rules are off.
+  leaveScale: 0.7, mu0: 0.3, capMul: 1.6, premium: 1.0, lateMu: 0.6,
+  starveBal: 0,
 };
 
 // Simulated stand-in for strong live entrants (calibrated in ANALYSIS.md):

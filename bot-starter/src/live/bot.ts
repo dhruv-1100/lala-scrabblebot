@@ -16,7 +16,7 @@ import type { Identity } from "spacetimedb";
 import { loadDict } from "../engine/dict.js";
 import { LIVE_PAID } from "../sim/agents.js";
 import { Lala, type LalaParams } from "../strategy/lala.js";
-import { TUNED } from "../strategy/params.js";
+import { TUNED, VERSION } from "../strategy/params.js";
 import { buildView, readMatch } from "./view.js";
 import { idx, countsToString } from "../engine/letters.js";
 
@@ -426,5 +426,6 @@ process.on("uncaughtException", (e) => {
   process.exit(1); // pm2 restarts us
 });
 
+log(`version ${VERSION}`);
 log(`params ${JSON.stringify(params)}`);
 connect();
