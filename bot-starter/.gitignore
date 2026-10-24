@@ -1,0 +1,9 @@
+# Bot tokens are secrets: never commit them.
+.token-*
+.env*
+# Collected data and logs (regenerate with npm run dump / npm run logger).
+data/raw/
+data/live/
+data/stream/
+data/*.log
+logs/

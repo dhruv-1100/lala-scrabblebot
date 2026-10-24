@@ -1,0 +1,16 @@
+import { loadDict } from "../src/engine/dict.js";
+import { runMatch } from "../src/sim/sim.js";
+import { SimBot, StarterBot, MarketBot } from "../src/sim/agents.js";
+import { Lala } from "../src/strategy/lala.js";
+const d = loadDict();
+const t = performance.now();
+const lala = new Lala(d);
+let ms: number[] = [];
+const orig = lala.act.bind(lala);
+lala.act = (v) => { const r = orig(v); ms.push(r.ms); return r; };
+const res = runMatch(d, [lala, new MarketBot(d, 1), new MarketBot(d, 2), new MarketBot(d, 3), new MarketBot(d, 4), new MarketBot(d, 5)], { seed: 7, record: true });
+console.log("match ms", (performance.now() - t).toFixed(0), "lala act ms mean", (ms.reduce((a, b) => a + b, 0) / ms.length).toFixed(2), "max", Math.max(...ms).toFixed(1));
+console.log(JSON.stringify({ scores: res.scores, places: res.places, tiles: res.tilesWon, spent: res.spent, bal: res.balances, unplayed: res.unplayed, rejected: res.rejected }));
+console.log(res.words.map((w) => w.join(" ")).join("\n"));
+const r2 = runMatch(d, [new Lala(d), new SimBot(d, "Aggressive", 1), new SimBot(d, "ValueBidder", 2), new SimBot(d, "Cheapskate", 3), new StarterBot(d), new SimBot(d, "Aggressive", 5)], { seed: 8 });
+console.log(JSON.stringify({ scores: r2.scores, tiles: r2.tilesWon, spent: r2.spent, unplayed: r2.unplayed, rejected: r2.rejected }));

@@ -1,16 +1,25 @@
 {
-  "name": "scrabblebot-bot-starter",
+  "name": "lala-scrabblebot",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "generate": "npm install --prefix ../spacetimedb && spacetime generate --lang typescript --out-dir src/module_bindings --module-path ../spacetimedb",
     "start": "tsx src/index.ts",
-    "test": "node --import tsx --test src/strategy.test.ts",
-    "build": "tsc"
+    "test": "node --import tsx --test src/engine/engine.test.ts src/strategy/strategy.test.ts",
+    "build": "tsc",
+    "bot": "tsx src/live/bot.ts",
+    "logger": "tsx src/live/logger.ts",
+    "dump": "tsx scripts/dump.ts data/raw",
+    "arena": "tsx src/sim/arena.ts",
+    "tune": "tsx src/sim/tune.ts",
+    "analyze": "tsx analysis/report.ts",
+    "typecheck": "tsc --noEmit -p .",
+    "bindings": "rm -rf src/module_bindings && cp -r ../src/module_bindings src/module_bindings"
   },
   "dependencies": {
     "spacetimedb": "^2.12.0",
+    "undici": "^6.29.1",
     "ws": "^8.18.0"
   },
   "devDependencies": {
