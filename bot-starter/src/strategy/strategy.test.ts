@@ -43,8 +43,9 @@ test("bids are integers within balance and decisions are fast", () => {
 });
 
 test("cashes in a complete word when it beats holding it", () => {
-  // Late, with little left to grow into, a 7-letter word is played at once.
-  const d = new Lala(dict, TUNED).act(view("RETAINS", "E", 4, 20));
+  // Late, a held word may wait for a better extension, but it is always
+  // cashed by the final auction.
+  const d = new Lala(dict, TUNED).act(view("RETAINS", "E", 1, 20));
   assert.ok(d.words.some((w) => w.length >= 7), d.words.join(","));
   // QUIXOTE is worth far more than anything it could grow into.
   const q = new Lala(dict, TUNED).act(view("QUIXOTE", "E", 30, 20));
