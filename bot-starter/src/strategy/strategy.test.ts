@@ -73,12 +73,19 @@ test("v2 values a vowel at least as much as a 1-point consonant on a consonant-h
   assert.ok(vowel.bid >= cons.bid, `E ${vowel.bid} < L ${cons.bid}`);
 });
 
-test("v2 never bids above 1.25x the going price before the last 3 auctions", () => {
-  const v2 = { ...TUNED, liveUse: 1, kappa1: 0.5, capMul: 1.25 };
+test("the price cap holds before the last 3 auctions (completion premium off)", () => {
+  const v2 = { ...TUNED, liveUse: 1, kappa1: 0.5, capMul: 1.25, completeMul: 0 };
   const lala = new Lala(dict, v2);
   for (const [r, l] of [["ETAINS", "R"], ["QUIXOT", "E"], ["ZAXJ", "Q"]] as const) {
     const d = lala.act(view(r, l, 30, 200));
     const price = lala.prices(view(r, l, 30, 200))[l.charCodeAt(0) - 65]!;
     assert.ok(d.bid <= Math.floor(1.25 * price) + 1, `${r}+${l}: bid ${d.bid} price ${price}`);
   }
+});
+
+test("pays the completion premium for a letter that finishes a 7-letter word", () => {
+  const lala = new Lala(dict, TUNED);
+  const finish = lala.act(view("ETAINS", "R", 30, 100));
+  const price = lala.prices(view("ETAINS", "R", 30, 100))[17]!;
+  assert.ok(finish.bid >= Math.floor(1.4 * price), `bid ${finish.bid} < 1.4 x ${price}`);
 });
