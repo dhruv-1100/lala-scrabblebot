@@ -58,6 +58,9 @@ export interface LalaParams extends ValueParams {
   capMul: number;     // never bid more than capMul x the going price, except in the last 3 auctions
   muMode: number;     // 0: mu0 * (need/have)^muAlpha; 1: re-solve mu each auction so the
                       // expected spend over the remaining auctions equals coins + income
+  focusMul: number;   // Lambi-style focus: bid at least focusMul x the going price for a letter
+  focusCut: number;   // the best target word still needs, and focusCut x for other letters while
+  focusT: number;     // more than focusT auctions remain (0 = off)
   chaseN: number;     // over the last chaseN auctions, if projected 2nd within chaseGap points
   chaseGap: number;   // of the leader, multiply bids on useful letters by chaseUp (above the
   chaseUp: number;    // usual price cap): go for the win when it is in reach
@@ -76,7 +79,7 @@ export const DEFAULT_LALA: LalaParams = {
   winP: 0.6, maxMissing: 3, rho: 1.0, kappa0: 2.5, kappa1: 0.5, dupDecay: 0.6, liveUse: 0, vowelUse: 0, leaveCapN: 0, leaveW: 0, leaveLive: 0, leaveScale: 1, minLen: 2, maxLen: 8,
   mu0: 0.25, muAlpha: 1.0, muMin: 0.05, muMax: 1.5, share: 0.2, incomeW: 0.7,
   premium: 1.0, liq: 0.1, playMargin: 0, coinW: 0, affordK: 0, starveBal: 0, starveMinLen: 4, starveT: 8, playK: 1, minPlayLen: 2, kappaT: 15, kappaMin: 0.3,
-  phasePrices: 0, priceN0: 8, shadeSigma: 0.35, earlyN: 0, earlyPremium: 1, paceRate: 0, paceK: 0.1, paceMax: 1.4, hiBoost: 0, completeMul: 0, completeMin: 12, completeLen: 6, vowelBal: 0, capMul: 99, muMode: 0, chaseN: 0, chaseGap: 15, chaseUp: 1.5, riskN: 0, riskUp: 1, riskGap: 25, midN: 0, midMu: 1, lateN: 12, lateMu: 1, bidNoise: 0, seed: 1,
+  phasePrices: 0, priceN0: 8, shadeSigma: 0.35, earlyN: 0, earlyPremium: 1, paceRate: 0, paceK: 0.1, paceMax: 1.4, hiBoost: 0, completeMul: 0, completeMin: 12, completeLen: 6, vowelBal: 0, capMul: 99, muMode: 0, focusMul: 0, focusCut: 1, focusT: 0, chaseN: 0, chaseGap: 15, chaseUp: 1.5, riskN: 0, riskUp: 1, riskGap: 25, midN: 0, midMu: 1, lateN: 12, lateMu: 1, bidNoise: 0, seed: 1,
 };
 
 export interface Decision extends Action {
@@ -314,6 +317,18 @@ export class Lala implements Agent {
     }
     if (T <= p.riskN && marginal > 0 && this.chasingFourth(v, val.base)) bid *= p.riskUp;
     if (T <= p.chaseN && T > 1 && marginal > 0 && this.chasingFirst(v, val.base)) bid *= p.chaseUp;
+    // Focus (Lambi Lambiii completes a 7-letter word by round ~25 with fewer
+    // early buys): pay up for letters the best target word still needs, and
+    // spend less on letters it doesn't while the match is young.
+    if ((p.focusMul > 0 || p.focusCut < 1) && T > 3 && val.bestWord >= 0) {
+      const d = this.dict;
+      let needed = false;
+      for (let q = d.dOff[val.bestWord]!; q < d.dOff[val.bestWord + 1]!; q++) {
+        if (d.dl[q] === v.letter && d.dc[q]! > rack[v.letter]!) needed = true;
+      }
+      if (needed && p.focusMul > 0) bid = Math.max(bid, p.focusMul * prices[v.letter]!);
+      else if (!needed && T > p.focusT) bid *= p.focusCut;
+    }
     if (p.bidNoise > 0) bid *= Math.exp(p.bidNoise * this.rng.normal());
     if (v.auctionType === "FirstPrice") bid = this.shade(bid, prices[v.letter]!);
     bid = Math.max(0, Math.min(balance, Math.floor(bid)));
