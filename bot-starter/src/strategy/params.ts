@@ -2,7 +2,7 @@
 import type { LalaParams } from "./lala.js";
 
 // Logged by the live bot so live results can be credited to a version.
-export const VERSION = "v3.3";
+export const VERSION = "v4.0-rollout";
 
 export const TUNED: Partial<LalaParams> = {
   // The existing leave coefficients were tuned with the old duplicate
@@ -76,6 +76,11 @@ export const LIVE_CONTROL: Partial<LalaParams> = {
   // v3.3: just-in-time play (cash complete 7+ letter words promptly, 1.5x for
   // word-completing letters), promoted from the v3.2 A/B arm B.
   minPlayLen: 7, playK: 0.4, completeMul: 1.5,
+  // v4.0: Monte Carlo playouts of the rest of the match (rollout.ts) may cut a
+  // bid to 0.6x when the letter doesn't pay off across ~64 futures, but not
+  // raise it. Paired sim (market, n=350): cuts-only place -0.186 +/- 0.137,
+  // score +3.7 +/- 2.1; with raises allowed it lost (place +0.294).
+  rollout: 1, rolloutMax: 1.05, rolloutMin: 0.6,
 };
 // v3.2 A/B: "just in time", the style of the bots winning now (Lambi Lambiii,
 // Lionel, Chinese Dante; analysis/reverse.ts, last 250-700 matches). They hold

@@ -144,3 +144,16 @@ test('learned bids retain the configured completion premium', () => {
   const d = new Lala(small,p).act(view('UIXOTE','Q',30,100));
   assert.ok(d.bid>=69, `completion bid was overwritten: ${d.bid}`);
 });
+
+test("rollout bids stay within bounds of the formula bid and run fast", async () => {
+  const { LIVE_CONTROL } = await import("./params.js");
+  const live = new Lala(dict, { ...TUNED, ...LIVE_CONTROL });
+  const formula = new Lala(dict, { ...TUNED, ...LIVE_CONTROL, rollout: 0 });
+  for (const [r, l, left] of [["EIRTOD", "S", 30], ["BCDFGH", "Z", 45], ["AEL", "T", 60], ["AEIRT", "Q", 50]] as const) {
+    const a = live.act(view(r, l, left, 80));
+    const b = formula.act(view(r, l, left, 80));
+    assert.ok(a.bid <= Math.ceil(b.bid * 1.05) + 1, `${r}+${l}: rollout ${a.bid} > formula ${b.bid}`);
+    assert.ok(a.bid >= Math.floor(b.bid * 0.6) - 1, `${r}+${l}: rollout ${a.bid} < 0.6 x formula ${b.bid}`);
+    assert.ok(a.ms < 400, `slow rollout decision ${a.ms}ms`);
+  }
+});

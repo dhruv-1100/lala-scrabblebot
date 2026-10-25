@@ -13,11 +13,13 @@ import { VALUE, VOWELS, wordReward, type Counts } from "../engine/letters.js";
 import { bestPartition, playable, removeWord } from "../engine/words.js";
 import type { Action, Agent, View } from "../sim/types.js";
 import { Valuer, LIVE_USE, USEFUL, type ValueParams } from "./value.js";
+import { Rollout, DEFAULT_ROLLOUT, type RolloutParams } from "./rollout.js";
 import { phasePrice, coinValue } from "./tables.js";
 import { LIVE_PAID } from "../sim/agents.js";
 import { Rng } from "../engine/rng.js";
 
-export interface LalaParams extends ValueParams {
+export interface LalaParams extends ValueParams, RolloutParams {
+  rollout: number;    // 1: bid from Monte Carlo playouts of the rest of the match (rollout.ts)
   futureBlend?: number;
   futureMuScale?: number;
   futurePlayMargin?: number;
@@ -84,6 +86,7 @@ export interface LalaParams extends ValueParams {
 }
 
 export const DEFAULT_LALA: LalaParams = {
+  rollout: 0, ...DEFAULT_ROLLOUT,
   expertCompletion: true, memoizeRack: true, uniquePlays: false, marketFloor: 0,
   winP: 0.6, maxMissing: 3, rho: 1.0, kappa0: 2.5, kappa1: 0.5, dupDecay: 0.6, liveUse: 0, vowelUse: 0, leaveCapN: 0, leaveW: 0, leaveLive: 0, leaveScale: 1, minLen: 2, maxLen: 8,
   mu0: 0.25, muAlpha: 1.0, muMin: 0.05, muMax: 1.5, share: 0.2, incomeW: 0.7,
@@ -102,6 +105,8 @@ export class Lala implements Agent {
   readonly name: string;
   readonly p: LalaParams;
   private valuer: Valuer;
+  private roll: Rollout;
+  lastRollout: { bid: number; gain: number; futures: number; plans: number; ms: number } | null = null;
   private rng: Rng;
   private expert: ExpertPolicy;
   private future: FuturePolicy;
@@ -110,6 +115,7 @@ export class Lala implements Agent {
   constructor(private dict: Dict, params: Partial<LalaParams> = {}, name = "Lala") {
     this.p = { ...DEFAULT_LALA, ...params };
     this.valuer = new Valuer(dict);
+    this.roll = new Rollout(dict);
     this.expert = new ExpertPolicy(dict);
     this.future = new FuturePolicy(dict);
     this.rng = new Rng(this.p.seed);
@@ -358,7 +364,31 @@ export class Lala implements Agent {
       const behind = p.paceRate * (v.round - 1) - won;
       if (behind > 1) bid *= Math.min(p.paceMax, 1 + p.paceK * (behind - 1));
     }
-    if (T > 3) bid = Math.min(bid, p.capMul * prices[v.letter]!);
+    // Monte Carlo playouts replace the formula bid when there are target
+    // words to chase; the formula (and its cap) stays as the fallback.
+    let usedRollout = false;
+    this.lastRollout = null;
+    if (p.rollout && T >= 4) {
+      const prior = (round: number, k: number): number =>
+        (p.phasePrices ? phasePrice(round, k, p.phasePrices === 2) : null) ?? LIVE_PAID[k]!;
+      const scaleK = (k: number) => prices[k]! / prior(v.round, k);
+      const r = this.roll.value({
+        rack, letter: v.letter, balance, unseen: v.tracker.unseen, bagRemaining: T - 1, round: v.round,
+        priceAt: (round, k) => Math.max(1, prior(round, k) * scaleK(k)),
+        coinValue,
+      }, p);
+      if (r) {
+        // Bounded: the rollout steers the formula bid within [min, max] x.
+        const formula = Math.min(bid, p.capMul * prices[v.letter]!);
+        bid = Math.max(p.rolloutMin * formula, Math.min(p.rolloutMax * Math.max(formula, 1), r.bid));
+        // Futures win nearly every affordable letter, which flatters rare
+        // letters (a Q for AEIRT came out at 2.5x): hard ceiling at the cap.
+        bid = Math.min(bid, p.rolloutCap * prices[v.letter]!);
+        usedRollout = true;
+        this.lastRollout = { bid: r.bid, gain: r.gainAtPrice, futures: r.futures, plans: r.plans, ms: r.ms };
+      }
+    }
+    if (T > 3 && !usedRollout) bid = Math.min(bid, p.capMul * prices[v.letter]!);
     // Finishing a word now is worth more than the letter's average value:
     // the points are certain and the coins come back for the next buy.
     let completionFloor = 0;
