@@ -2,7 +2,7 @@
 import type { LalaParams } from "./lala.js";
 
 // Logged by the live bot so live results can be credited to a version.
-export const VERSION = "v3.2-ab";
+export const VERSION = "v3.3";
 
 export const TUNED: Partial<LalaParams> = {
   // The existing leave coefficients were tuned with the old duplicate
@@ -73,6 +73,9 @@ export const RIVAL_STYLES: Partial<LalaParams>[] = [
 export const LIVE_CONTROL: Partial<LalaParams> = {
   valuationFix: 1, expertPolicy: 0, expertWordMode: 0,
   capMul: 1.3, completeValue: 0.5, expertCompletion: true,
+  // v3.3: just-in-time play (cash complete 7+ letter words promptly, 1.5x for
+  // word-completing letters), promoted from the v3.2 A/B arm B.
+  minPlayLen: 7, playK: 0.4, completeMul: 1.5,
 };
 // v3.2 A/B: "just in time", the style of the bots winning now (Lambi Lambiii,
 // Lionel, Chinese Dante; analysis/reverse.ts, last 250-700 matches). They hold
@@ -81,4 +84,8 @@ export const LIVE_CONTROL: Partial<LalaParams> = {
 // coins 1-7 rounds a match (Lala 14-15). Arm B cashes complete 7+ letter words
 // promptly (playK 0.4 for play decisions only, no short words before the
 // endgame) and pays 1.5x for word-completing letters.
-export const VARIANT_B: Partial<LalaParams> = { minPlayLen: 7, playK: 0.4, completeMul: 1.5 };
+// Result after 15 interleaved games: arm A (v3.1) places 2,6,1,4,1,1,6,3,6
+// (3 wins, 3 sixths, rating value -0.10/game); arm B places 3,3,5,3,1,4
+// (rating value +0.32/game), same mean score (82). Promoted to LIVE_CONTROL in
+// v3.3 on that small sample plus the top-bot evidence; A/B off.
+export const VARIANT_B: Partial<LalaParams> = {};
