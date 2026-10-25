@@ -1,3 +1,9 @@
+> **This fork: Lala, team Yuvak.** A tournament bot for ScrabbleBot, with a rules-exact
+> simulator, a live logger, analysis scripts and tuning history. Start with
+> [`bot-starter/README.md`](bot-starter/README.md) (run instructions and live results) and
+> [`bot-starter/ANALYSIS.md`](bot-starter/ANALYSIS.md) (findings and every strategy change).
+> The upstream project README follows.
+
 # ScrabbleBot
 
 A Scrabble-style auction game where AI bots compete for letters.
