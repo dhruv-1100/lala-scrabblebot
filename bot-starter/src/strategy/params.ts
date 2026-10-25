@@ -2,7 +2,7 @@
 import type { LalaParams } from "./lala.js";
 
 // Logged by the live bot so live results can be credited to a version.
-export const VERSION = "v2.7.4";
+export const VERSION = "v2.7.5";
 
 export const TUNED: Partial<LalaParams> = {
   muAlpha: 0.6, kappa0: 3.5, winP: 0.9, dupDecay: 0.8, kappa1: 1, maxMissing: 2,
@@ -23,7 +23,7 @@ export const TUNED: Partial<LalaParams> = {
   // 11 games, place 3.45, score 68. The starvation rule cashes 5-6 letter words
   // at 2-2.5x instead of building 7+ at 3x, and v2.2's own score fell 22 points
   // against weaker best rivals (101 vs 109). Both rules are off.
-  mu0: 0.3, capMul: 1.6, premium: 1.0, lateMu: 0.6,
+  mu0: 0.3, premium: 1.0, lateMu: 0.6, // capMul 1.6 until v2.7.5 (below)
   // v2.7.4: narrow starvation rule. Live games kept showing Lala broke for
   // 15-25 rounds while holding a complete 7-8 letter word (PIONEERS at 2
   // coins with 16 auctions left). Below 8 coins with 10+ auctions left, cash
@@ -43,6 +43,15 @@ export const TUNED: Partial<LalaParams> = {
   // place ~3.2, rating 2031 -> 1929. The real-game table won in simulation but
   // not live; it was fitted to every bot's racks, weak bots included.
   leaveLive: 0, leaveScale: 0.7, phasePrices: 1,
+  // v2.7.5: tighter price cap (1.6x -> 1.25x the going price). Live, the
+  // leaders bid ~1.10-1.19x early while Lala bid 1.36x, won the expensive
+  // early tiles and was broke by round 45. First sim field that reproduces
+  // live Lala ("top": Waupus/james/Lambi-style rivals; Lala 17-22% wins,
+  // 4.1 early tiles for 62 coins vs 4.3/66 live). Screen n=300: capMul 1.35
+  // the only significant win among 9 variants. Fresh seeds n=900: capMul
+  // 1.25 win +5.0 +/- 2.7 pts (21% -> 26%), place -0.23, score +2.8, rating
+  // value +0.095 +/- 0.038; 1.35 win +4.6, place -0.16.
+  capMul: 1.25,
 };
 
 // Simulated stand-in for strong live entrants (calibrated in ANALYSIS.md):
@@ -66,6 +75,23 @@ export const RIVAL_STYLES: Partial<LalaParams>[] = [
   { ...RIVAL_BASE, premium: 1.1, share: 0.27, minPlayLen: 7, playK: 0.4 },
   // A typical mid-table entrant.
   { ...RIVAL_BASE, premium: 1.0, bidNoise: 0.35 },
+];
+
+// v2.8 field: the late-2026 leaders (analysis/study.ts, live profiles).
+// Waupus (56% wins) and james (49%) bid ~1.10-1.19x the reference price over
+// rounds 1-20 (Lala 1.36x), hold ~40 coins at round 45 (Lala 15) and buy
+// 4.6 tiles in the last 23 auctions at up to 1.7x (Lala 2.5).
+export const TOP_STYLES: Partial<LalaParams>[] = [
+  // Waupus
+  { earlyN: 20, earlyPremium: 0.8, premium: 0.95, lateMu: 0.45 },
+  // james
+  { earlyN: 20, earlyPremium: 0.88, premium: 0.97, lateMu: 0.5 },
+  // Lambi Lambiii (from the v2 pool)
+  RIVAL_STYLES[0]!,
+  // Waupus again (two of the five seats: the leaders are in most games)
+  { earlyN: 20, earlyPremium: 0.8, premium: 0.95, lateMu: 0.45 },
+  // A v2.7-like rival
+  {},
 ];
 
 // Live A/B test (interleaved by match id, so both arms face the same field at

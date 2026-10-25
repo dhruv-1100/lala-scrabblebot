@@ -8,7 +8,7 @@ import { loadDict } from "../engine/dict.js";
 import { runMatch } from "./sim.js";
 import { LIVE_PAID, MarketBot, DEFAULT_MARKET } from "./agents.js";
 import { Lala, type LalaParams } from "../strategy/lala.js";
-import { TUNED, LIVELIKE, RIVAL_STYLES } from "../strategy/params.js";
+import { TUNED, LIVELIKE, RIVAL_STYLES, TOP_STYLES } from "../strategy/params.js";
 import type { Agent, View } from "./types.js";
 
 const PH = [[1, 20], [21, 45], [46, 56], [57, 68]] as const;
@@ -27,6 +27,7 @@ function rival(i: number, seed: number): Agent {
   const s = seed * 31 + i;
   if (fieldName === "market") return new MarketBot(dict, s, DEFAULT_MARKET);
   if (fieldName === "livelike") return new Lala(dict, { ...TUNED, ...LIVELIKE, ...fieldParams, seed: s }, `live-${i}`);
+  if (fieldName === "top") return new Lala(dict, { ...TUNED, ...TOP_STYLES[i % TOP_STYLES.length]!, ...fieldParams, seed: s }, `top-${i}`);
   if (fieldName === "self") return new Lala(dict, { ...TUNED, ...fieldParams }, `self-${i}`);
   const style = RIVAL_STYLES[(i + seed) % RIVAL_STYLES.length]!;
   return new Lala(dict, { ...TUNED, ...style, ...fieldParams, seed: s }, `pop-${i}`);

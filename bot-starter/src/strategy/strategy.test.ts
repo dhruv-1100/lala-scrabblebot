@@ -84,8 +84,11 @@ test("the price cap holds before the last 3 auctions (completion premium off)", 
 });
 
 test("pays the completion premium for a letter that finishes a 7-letter word", () => {
+  // BDEILU + R = BUILDER (no 6-letter word without it). ETAINS + R was used
+  // before v2.7.5, but TISANE is already playable, so R only adds 6 points
+  // and the premium rightly stays off; that test passed through the 1.6x cap.
   const lala = new Lala(dict, TUNED);
-  const finish = lala.act(view("ETAINS", "R", 30, 100));
-  const price = lala.prices(view("ETAINS", "R", 30, 100))[17]!;
+  const finish = lala.act(view("BDEILU", "R", 30, 100));
+  const price = lala.prices(view("BDEILU", "R", 30, 100))[17]!;
   assert.ok(finish.bid >= Math.floor(1.4 * price), `bid ${finish.bid} < 1.4 x ${price}`);
 });

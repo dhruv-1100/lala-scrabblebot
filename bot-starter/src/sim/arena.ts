@@ -13,11 +13,11 @@ import { loadDict } from "../engine/dict.js";
 import { runMatch } from "./sim.js";
 import { MarketBot, SimBot, StarterBot, DEFAULT_MARKET, type MarketParams } from "./agents.js";
 import { Lala, type LalaParams } from "../strategy/lala.js";
-import { TUNED, LIVELIKE, RIVAL_STYLES } from "../strategy/params.js";
+import { TUNED, LIVELIKE, RIVAL_STYLES, TOP_STYLES } from "../strategy/params.js";
 import type { Agent } from "./types.js";
 import type { AuctionType } from "../engine/tracker.js";
 
-export type FieldName = "market" | "sims" | "starter" | "self" | "mixed" | "lalamix" | "livelike" | "blend" | "pop";
+export type FieldName = "market" | "sims" | "starter" | "self" | "mixed" | "lalamix" | "livelike" | "blend" | "pop" | "top";
 
 export interface Job {
   field: FieldName;
@@ -67,6 +67,9 @@ function field(dict: ReturnType<typeof loadDict>, job: Job, seed: number): Agent
         const style = RIVAL_STYLES[(i + seed) % RIVAL_STYLES.length]!;
         return new Lala(dict, { ...TUNED, ...style, ...job.fieldParams, seed: s }, `pop-${i}`);
       }
+      case "top":
+        // The late-2026 leaders (TOP_STYLES): thrifty early, heavy late.
+        return new Lala(dict, { ...TUNED, ...TOP_STYLES[i % TOP_STYLES.length]!, ...job.fieldParams, seed: s }, `top-${i}`);
       case "blend":
         // Two market bots and three live-like rivals.
         return i < 2
