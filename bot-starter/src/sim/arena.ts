@@ -17,7 +17,7 @@ import { TUNED, LIVELIKE, RIVAL_STYLES } from "../strategy/params.js";
 import type { Agent } from "./types.js";
 import type { AuctionType } from "../engine/tracker.js";
 
-export type FieldName = "market" | "sims" | "starter" | "self" | "mixed" | "lalamix" | "livelike" | "blend" | "pop";
+export type FieldName = "market" | "sims" | "starter" | "self" | "mixed" | "lalamix" | "livelike" | "blend" | "pop" | "experts";
 
 export interface Job {
   field: FieldName;
@@ -55,6 +55,8 @@ function field(dict: ReturnType<typeof loadDict>, job: Job, seed: number): Agent
         return new SimBot(dict, (["Cheapskate", "ValueBidder", "Aggressive", "ValueBidder", "Aggressive", "Cheapskate"] as const)[i % 6]!, s);
       case "starter":
         return new StarterBot(dict);
+      case "experts":
+        return new Lala(dict, { ...TUNED, ...job.fieldParams, expertPolicy: [2, 3, 4, 1, 1][i % 5], expertBidScale: i === 4 ? 1.05 : 1 }, `expert-${i}`);
       case "self":
         return new Lala(dict, { ...TUNED, ...job.fieldParams }, `lala-f${i}`);
       case "mixed":
@@ -107,7 +109,7 @@ if (!isMainThread) {
   parentPort!.postMessage(runJob(workerData as Job));
 }
 
-export async function arena(job: Omit<Job, "seeds">, n: number, seed0 = 1, threads = Math.max(1, os.cpus().length - 1)): Promise<Row[]> {
+export async function arena(job: Omit<Job, "seeds">, n: number, seed0 = 1, threads = Math.min(2, Math.max(1, os.cpus().length - 1))): Promise<Row[]> {
   const seeds = Array.from({ length: n }, (_, i) => seed0 + i);
   const chunks: number[][] = Array.from({ length: threads }, () => []);
   seeds.forEach((s, i) => chunks[i % threads]!.push(s));
@@ -186,11 +188,13 @@ if (isMainThread && process.argv[1] === fileURLToPath(import.meta.url)) {
   };
   const n = Number(arg("n", "500"));
   const t = Date.now();
-  const rows = await arena(job, n, Number(arg("seed", "1")));
+  const threads = Number(arg("threads", "2"));
+  if (!Number.isInteger(threads) || threads < 1) throw new Error("--threads must be a positive integer");
+  const rows = await arena(job, n, Number(arg("seed", "1")), threads);
   console.log(`cand ${JSON.stringify(job.params)}\n  ${summary(rows)}`);
   const base = arg("base");
   if (base !== undefined) {
-    const brows = await arena({ ...job, params: JSON.parse(base) }, n, Number(arg("seed", "1")));
+    const brows = await arena({ ...job, params: JSON.parse(base) }, n, Number(arg("seed", "1")), threads);
     console.log(`base ${base}\n  ${summary(brows)}\n  diff: ${paired(rows, brows)}`);
   }
   console.log(`(${((Date.now() - t) / 1000).toFixed(0)}s)`);

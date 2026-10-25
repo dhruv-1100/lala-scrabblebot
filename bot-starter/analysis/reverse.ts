@@ -92,11 +92,11 @@ for (const m of ms) {
   }
 }
 const f = (x: number, d = 1) => (Number.isFinite(x) ? x.toFixed(d) : "-");
-const rows = [...acc.entries()].filter(([id, a]) => a.games >= 80 || id === 88).sort((x, y) => mean(x[1].place) - mean(y[1].place));
+const rows = [...acc.entries()].filter(([id, a]) => a.games >= Number(process.env.MIN_GAMES ?? 80) || id === 88).sort((x, y) => mean(x[1].place) - mean(y[1].place));
 console.log(`Last ${RECENT} matches; bots with 80+ games (and Lala), best average place first.\n`);
 console.log("| bot | games | place | win% | score | hold (rounds, median) | completing buys | bid/price completing vs other | rack when playing 6+ | coins when playing 6+ | 7+ words | 1st 7+ word | pts/letter in 7+ | starved rounds | bargains (<=0.6x) |");
 console.log("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
-for (const [id, a] of rows.slice(0, 12).concat(rows.filter(([id]) => id === 88))) {
+for (const [id, a] of rows.filter(([id]) => id !== 88).slice(0, 12).concat(rows.filter(([id]) => id === 88))) {
   const name = id === 88 ? "**Lala**" : names.get(id) ?? String(id);
   console.log(`| ${name} | ${a.games} | ${f(mean(a.place), 2)} | ${f(100 * mean(a.place.map((x) => (x === 1 ? 1 : 0))), 0)} | ${f(mean(a.score), 0)} | ${f(quantile(a.hold, 0.5), 0)} | ${f(100 * mean(a.completeShare), 0)}% | ${f(quantile(a.completeRatio, 0.5), 2)} vs ${f(quantile(a.otherRatio, 0.5), 2)} | ${f(mean(a.rackAtPlay))} | ${f(mean(a.balAtPlay), 0)} | ${f(mean(a.bigWords), 2)} | ${f(mean(a.firstBig), 0)} | ${f(mean(a.baseMid), 2)} | ${f(mean(a.lowBal))} | ${f(100 * mean(a.cheapLate), 0)}% |`);
 }

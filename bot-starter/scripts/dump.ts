@@ -1,4 +1,4 @@
-// One-shot snapshot of every public table into data/raw/<table>.jsonl.
+// One-shot snapshot of the public research tables into data/raw/<table>.jsonl.
 import { DbConnection } from "../src/module_bindings/index.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -9,7 +9,7 @@ fs.mkdirSync(OUT, { recursive: true });
 
 const TABLES = [
   "matchState", "matchParticipant", "auctionResult", "auctionTopBidArchive",
-  "wordPlay", "bot", "botStats", "lobby", "lobbyMember", "auction",
+  "wordPlay", "bot", "botStats", "lobby", "lobbyMember",
   "ratingHistory", "team", "botVersion", "retiredBotStats",
 ];
 
@@ -28,7 +28,9 @@ DbConnection.builder()
         }
         process.exit(0);
       })
-      .subscribeToAllTables();
+      // Request only what we export: no live winning-bid view, private rack
+      // views, or redundant full auction table in this historical snapshot.
+      .subscribe(TABLES.map((name) => `SELECT * FROM ${name.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)}`));
   })
   .onConnectError((_c, e) => { console.error(e); process.exit(1); })
   .build();

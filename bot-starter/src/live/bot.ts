@@ -16,7 +16,8 @@ import type { Identity } from "spacetimedb";
 import { loadDict } from "../engine/dict.js";
 import { LIVE_PAID } from "../sim/agents.js";
 import { Lala, type LalaParams } from "../strategy/lala.js";
-import { TUNED, VERSION, VARIANT_B } from "../strategy/params.js";
+import { TUNED, VERSION, VARIANT_B, LIVE_CONTROL } from "../strategy/params.js";
+import { SafeLog } from "./safe-log.js";
 import { buildView, readMatch } from "./view.js";
 import { idx, countsToString } from "../engine/letters.js";
 
@@ -32,9 +33,10 @@ const TOKEN_PATH = path.join(ROOT, `.token-${BOT_NAME}`);
 // current match, doesn't rejoin the lobby, and exits (pm2 restarts it).
 const DRAIN_PATH = path.join(ROOT, ".drain");
 const LOG_DIR = path.resolve(process.env.LOG_DIR ?? path.join(ROOT, "data", "live"));
-fs.mkdirSync(LOG_DIR, { recursive: true });
+try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch { /* logging is best-effort */ }
+const telemetry = new SafeLog(LOG_DIR);
 
-const params: Partial<LalaParams> = { ...TUNED, ...JSON.parse(process.env.LALA_PARAMS ?? "{}") };
+const params: Partial<LalaParams> = { ...TUNED, ...LIVE_CONTROL, ...JSON.parse(process.env.LALA_PARAMS ?? "{}") };
 const dict = loadDict();
 const lala = new Lala(dict, params, BOT_NAME);
 // Interleaved A/B: a hash of the match id picks the arm. (Plain parity broke:
@@ -57,14 +59,10 @@ function stamp(): string {
   return new Date().toISOString();
 }
 function log(msg: string): void {
-  console.log(`${stamp()} [${BOT_NAME}] ${msg}`);
+  telemetry.text(`${stamp()} [${BOT_NAME}] ${msg}`);
 }
 function jsonl(file: string, row: Record<string, unknown>): void {
-  const day = new Date().toISOString().slice(0, 10);
-  fs.appendFileSync(
-    path.join(LOG_DIR, `${file}-${day}.jsonl`),
-    JSON.stringify({ t: stamp(), ...row }, (_k, v) => (typeof v === "bigint" ? Number(v) : v)) + "\n",
-  );
+  telemetry.json(file, row);
 }
 
 function loadToken(): string | undefined {

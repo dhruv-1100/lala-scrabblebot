@@ -2,9 +2,13 @@
 import type { LalaParams } from "./lala.js";
 
 // Logged by the live bot so live results can be credited to a version.
-export const VERSION = "v2.7";
+export const VERSION = "v3.1-recovery";
 
 export const TUNED: Partial<LalaParams> = {
+  // The existing leave coefficients were tuned with the old duplicate
+  // arithmetic. Keep that calibration while fixing impossible completions.
+  // The corrected arithmetic remains opt-in with legacyLeave: false.
+  legacyLeave: true,
   muAlpha: 0.6, kappa0: 3.5, winP: 0.9, dupDecay: 0.8, kappa1: 1, maxMissing: 2,
   liq: 0, share: 0.2, incomeW: 0.3, rho: 0.6,
   // v1.1 introduced the late reserve (lateMu) and the bid cap relative to the
@@ -62,10 +66,12 @@ export const RIVAL_STYLES: Partial<LalaParams>[] = [
   { ...RIVAL_BASE, premium: 1.0, bidNoise: 0.35 },
 ];
 
-// Live A/B test (interleaved by match id, so both arms face the same field at
-// the same time). Arm A plays TUNED; arm B plays TUNED + VARIANT_B.
-// Set VARIANT_B to {} to switch the test off.
-// Last test (earlyN 25, earlyPremium 1.15: bid 15% more over the first 25
-// auctions) lost: arm A 11 games place 2.36, 0% bottom-two; arm B 7 games place
-// 3.43, 14% bottom-two. Off until the next variant.
+// Recovery: the learned-bid release had 0 wins in 18 fresh-epoch games.
+// Restore the earlier live B configuration (5 wins / 18 observed games),
+// retaining the valuation, logging and endgame correctness repairs.
+// This is a rollback to observed live behavior, not a claimed new winner.
+export const LIVE_CONTROL: Partial<LalaParams> = {
+  valuationFix: 1, expertPolicy: 0, expertWordMode: 0,
+  capMul: 1.3, completeValue: 0.5, expertCompletion: true,
+};
 export const VARIANT_B: Partial<LalaParams> = {};
