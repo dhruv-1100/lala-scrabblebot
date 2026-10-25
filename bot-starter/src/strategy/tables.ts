@@ -29,15 +29,14 @@ export interface PhasePrices {
 export const LEAVE: LeaveTable | null = readJson<LeaveTable>("leave-table.json");
 // The same model fitted to real matches (scripts/train-leave-live.ts).
 export const LEAVE_LIVE: LeaveTable | null = readJson<LeaveTable>("leave-table-live.json");
-export const LEAVE_LEADERS: LeaveTable | null = readJson<LeaveTable>("leave-table-leaders.json");
 export const PHASE: PhasePrices | null = readJson<PhasePrices>("phase-prices.json");
 // Refit on the most recent 900 matches (scripts/phase-prices-recent.ts).
 export const PHASE_RECENT: PhasePrices | null = readJson<PhasePrices>("phase-prices-recent.json");
 
 // Cumulative leave value (points) of holding `copies` of letter k when
 // `T` auctions are left. Copies past the third are worth half the third.
-export function leaveValue(T: number, k: number, copies: number, live: boolean | number = false): number {
-  const L = live === 2 && LEAVE_LEADERS ? LEAVE_LEADERS : live && LEAVE_LIVE ? LEAVE_LIVE : LEAVE;
+export function leaveValue(T: number, k: number, copies: number, live = false): number {
+  const L = live && LEAVE_LIVE ? LEAVE_LIVE : LEAVE;
   if (!L || copies <= 0) return 0;
   let b = L.buckets.findIndex(([lo, hi]) => T >= lo && T <= hi);
   if (b < 0) b = T > 40 ? 0 : L.buckets.length - 1;

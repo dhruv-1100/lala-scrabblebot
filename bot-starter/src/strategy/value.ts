@@ -9,7 +9,6 @@
 // best plan. One scan also yields the value of the rack plus one extra
 // letter, which is what an auction for that letter is worth to us.
 
-import { OptionValuer } from "./option-value.js";
 import type { Dict } from "../engine/dict.js";
 import { VALUE, VOWELS } from "../engine/letters.js";
 import { leaveValue } from "./tables.js";
@@ -31,10 +30,6 @@ export const USEFUL: readonly number[] = [
 ];
 
 export interface ValueParams {
-  optionValue?: number; // 0: legacy; 1: sampled future-plan options; intermediate blends
-
-  valuationFix?: number; // 0 reproduces v2.7 for paired benchmarks
-  legacyLeave?: boolean; // retain old duplicate arithmetic until leave weights are recalibrated
   winP: number;        // chance we win a letter we go after
   maxMissing: number;  // ignore plans missing more letters than this
   rho: number;         // weight on the coin cost of missing letters
@@ -45,7 +40,7 @@ export interface ValueParams {
   leaveCapN: number;   // >0: past this many leftover tiles, leftover value scales by capN/n
                        // (additive leave values made 13-tile racks look worth ~65 points)
   leaveW: number;      // 0..1: share of leftover value taken from the learned leave table
-  leaveLive: number;   // 1: all-live fit; 2: exact-rack leader-only fit; 0: simulated fit
+  leaveLive: number;   // 1: use the table fitted to real matches instead of simulated ones
   leaveScale: number;  // points of table value per point of leftover value
   vowelUse: number;    // >0: usefulness of A/E/I/O/U in the dictionary table (it rates them 0.73-0.97)
   minLen: number;      // shortest target word considered
@@ -77,8 +72,7 @@ export class Valuer {
   private cumK = new Float64Array(26 * 8);
   private costW = new Float64Array(26);
 
-  private option: OptionValuer;
-  constructor(private dict: Dict) { this.option = new OptionValuer(dict); }
+  constructor(private dict: Dict) {}
 
   // unseen: tiles we can't see; futureDraws: auctions after this one whose
   // tiles could still be played; prices: expected coins per letter.
@@ -86,8 +80,6 @@ export class Valuer {
     rack: Uint8Array, letter: number, unseen: Uint8Array, futureDraws: number,
     prices: ArrayLike<number>, mu: number, p: ValueParams, kappaScale: number, kMul = 1,
   ): Valuation {
-    if ((p.optionValue ?? 0) >= 1) return this.option.evaluate(rack, letter, unseen, futureDraws, prices, mu, p, kappaScale, kMul);
-    const option = (p.optionValue ?? 0) > 0 ? this.option.evaluate(rack, letter, unseen, futureDraws, prices, mu, p, kappaScale, kMul) : null;
     const d = this.dict;
     let unseenTotal = 0;
     for (let k = 0; k < 26; k++) unseenTotal += unseen[k]!;
@@ -111,7 +103,7 @@ export class Valuer {
         // Replace the hand-built leftover value by the learned one: the
         // value of holding j copies, as fitted to simulated outcomes.
         for (let j = 1; j < 8; j++) {
-          const learned = Math.max(0, leaveValue(futureDraws + 2, k, j, p.leaveLive)) * p.leaveScale * kMul;
+          const learned = Math.max(0, leaveValue(futureDraws + 2, k, j, p.leaveLive === 1)) * p.leaveScale * kMul;
           this.cumK[k * 8 + j] = (1 - p.leaveW) * this.cumK[k * 8 + j]! + p.leaveW * learned;
         }
       }
@@ -150,12 +142,10 @@ export class Valuer {
       }
       let missing = 0;
       let prob = 1;
-      let probOther = 1;
       let cost = 0;
       let used = 0; // kappa of rack tiles the word uses
       let usedN = 0; // how many rack tiles the word uses
       let defL = 0; // how many `letter` the word still lacks
-      let leftL = rack[letter]!;
       const pe = dOff[i + 1]!;
       let q = dOff[i]!;
       for (; q < pe; q++) {
@@ -166,16 +156,13 @@ export class Valuer {
           const def = need - have;
           missing += def;
           if (missing > maxMissing + 1) break;
-          const chance = def > unseen[k]! ? 0 : pObt[k * 6 + (def > 5 ? 5 : def)]!;
-          prob *= p.valuationFix === 0 ? pObt[k * 6 + (def > 5 ? 5 : def)]! : chance;
-          if (k !== letter) probOther *= chance;
+          prob *= pObt[k * 6 + (def > 5 ? 5 : def)]!;
           cost += def * costW[k]!;
           used += cumK[k * 8 + (have > 7 ? 7 : have)]!;
           usedN += have;
           if (k === letter) defL = def;
         } else {
-          if (k === letter) leftL = have - need;
-          used += p.valuationFix === 0 || p.legacyLeave ? ck(k, need) : ck(k, have) - ck(k, have - need);
+          used += cumK[k * 8 + (need > 7 ? 7 : need)]!;
           usedN += need;
         }
       }
@@ -190,8 +177,7 @@ export class Valuer {
           bestWord = i;
         }
         if (defL === 0) {
-          const extra = p.valuationFix === 0 || p.legacyLeave ? kNext : ck(letter, leftL + 1) - ck(letter, leftL);
-          const vL = prob * r - cost + (rackKappa - used + extra) * sz(left + 1);
+          const vL = prob * r - cost + (rackKappa - used + kNext) * sz(left + 1);
           if (vL > bestL) bestL = vL;
         }
       }
@@ -199,18 +185,10 @@ export class Valuer {
       if (defL > 0 && missing - 1 <= maxMissing) {
         const pk = pObt[letter * 6 + (defL > 5 ? 5 : defL)]!;
         const pk1 = pObt[letter * 6 + (defL - 1 > 5 ? 5 : defL - 1)]!;
-        // This auction can contain the last available copy. Its future
-        // probability is then zero, but acquiring it completes this deficit.
-        const probL = p.valuationFix === 0
-          ? (pk > 0 ? (prob / pk) * pk1 : 0)
-          : (defL - 1 > unseen[letter]! ? 0 : probOther * pk1);
+        const probL = pk > 0 ? (prob / pk) * pk1 : 0;
         const vL = probL * r - (cost - costW[letter]!) + (rackKappa - used) * sz(rackTiles - usedN);
         if (vL > bestL) bestL = vL;
       }
-    }
-    if (option) {
-      const w = p.optionValue!;
-      return { base: best0 * (1 - w) + option.base * w, withLetter: Math.max(bestL, best0 + kNext) * (1 - w) + option.withLetter * w, bestWord };
     }
     return { base: best0, withLetter: Math.max(bestL, best0 + kNext), bestWord };
   }

@@ -2,13 +2,9 @@
 import type { LalaParams } from "./lala.js";
 
 // Logged by the live bot so live results can be credited to a version.
-export const VERSION = "v4.0-rollout";
+export const VERSION = "v2.7.2";
 
 export const TUNED: Partial<LalaParams> = {
-  // The existing leave coefficients were tuned with the old duplicate
-  // arithmetic. Keep that calibration while fixing impossible completions.
-  // The corrected arithmetic remains opt-in with legacyLeave: false.
-  legacyLeave: true,
   muAlpha: 0.6, kappa0: 3.5, winP: 0.9, dupDecay: 0.8, kappa1: 1, maxMissing: 2,
   liq: 0, share: 0.2, incomeW: 0.3, rho: 0.6,
   // v1.1 introduced the late reserve (lateMu) and the bid cap relative to the
@@ -66,31 +62,10 @@ export const RIVAL_STYLES: Partial<LalaParams>[] = [
   { ...RIVAL_BASE, premium: 1.0, bidNoise: 0.35 },
 ];
 
-// Recovery: the learned-bid release had 0 wins in 18 fresh-epoch games.
-// Restore the earlier live B configuration (5 wins / 18 observed games),
-// retaining the valuation, logging and endgame correctness repairs.
-// This is a rollback to observed live behavior, not a claimed new winner.
-export const LIVE_CONTROL: Partial<LalaParams> = {
-  valuationFix: 1, expertPolicy: 0, expertWordMode: 0,
-  capMul: 1.3, completeValue: 0.5, expertCompletion: true,
-  // v3.3: just-in-time play (cash complete 7+ letter words promptly, 1.5x for
-  // word-completing letters), promoted from the v3.2 A/B arm B.
-  minPlayLen: 7, playK: 0.4, completeMul: 1.5,
-  // v4.0: Monte Carlo playouts of the rest of the match (rollout.ts) may cut a
-  // bid to 0.6x when the letter doesn't pay off across ~64 futures, but not
-  // raise it. Paired sim (market, n=350): cuts-only place -0.186 +/- 0.137,
-  // score +3.7 +/- 2.1; with raises allowed it lost (place +0.294).
-  rollout: 1, rolloutMax: 1.05, rolloutMin: 0.6,
-};
-// v3.2 A/B: "just in time", the style of the bots winning now (Lambi Lambiii,
-// Lionel, Chinese Dante; analysis/reverse.ts, last 250-700 matches). They hold
-// a tile 7-13 rounds (Lala 18-19), 17-29% of their buys complete a word within
-// a round (Lala 8%), Lambi pays 1.53x for those letters, and they are short of
-// coins 1-7 rounds a match (Lala 14-15). Arm B cashes complete 7+ letter words
-// promptly (playK 0.4 for play decisions only, no short words before the
-// endgame) and pays 1.5x for word-completing letters.
-// Result after 15 interleaved games: arm A (v3.1) places 2,6,1,4,1,1,6,3,6
-// (3 wins, 3 sixths, rating value -0.10/game); arm B places 3,3,5,3,1,4
-// (rating value +0.32/game), same mean score (82). Promoted to LIVE_CONTROL in
-// v3.3 on that small sample plus the top-bot evidence; A/B off.
+// Live A/B test (interleaved by match id, so both arms face the same field at
+// the same time). Arm A plays TUNED; arm B plays TUNED + VARIANT_B.
+// Set VARIANT_B to {} to switch the test off.
+// Last test (earlyN 25, earlyPremium 1.15: bid 15% more over the first 25
+// auctions) lost: arm A 11 games place 2.36, 0% bottom-two; arm B 7 games place
+// 3.43, 14% bottom-two. Off until the next variant.
 export const VARIANT_B: Partial<LalaParams> = {};

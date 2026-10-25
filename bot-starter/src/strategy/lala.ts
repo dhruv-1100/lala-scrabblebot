@@ -6,33 +6,16 @@
 // what the rest of the match will cost and falls to ~0 as the match runs
 // out, because leftover coins are worth nothing.
 
-import { FuturePolicy } from "./future-policy.js";
-import { ExpertPolicy } from "./expert-policy.js";
 import type { Dict } from "../engine/dict.js";
-import { VALUE, VOWELS, wordReward, type Counts } from "../engine/letters.js";
+import { VALUE, VOWELS, type Counts } from "../engine/letters.js";
 import { bestPartition, playable, removeWord } from "../engine/words.js";
 import type { Action, Agent, View } from "../sim/types.js";
 import { Valuer, LIVE_USE, USEFUL, type ValueParams } from "./value.js";
-import { Rollout, DEFAULT_ROLLOUT, type RolloutParams } from "./rollout.js";
 import { phasePrice, coinValue } from "./tables.js";
 import { LIVE_PAID } from "../sim/agents.js";
 import { Rng } from "../engine/rng.js";
 
-export interface LalaParams extends ValueParams, RolloutParams {
-  rollout: number;    // 1: bid from Monte Carlo playouts of the rest of the match (rollout.ts)
-  futureBlend?: number;
-  futureMuScale?: number;
-  futurePlayMargin?: number;
-  futureMinLen?: number;
-  expertCompletion: boolean; // learned bids must retain configured completion premiums
-  expertPolicy?: number;
-  expertBidScale?: number;
-  expertBidAdd?: number;
-  expertWordMode?: number; // 1: original play selection + learned bids; 2: cash ready long words
-  expertPlayThreshold?: number;
-  memoizeRack: boolean; // reuse identical rack valuations within one decision
-  uniquePlays: boolean; // spend the candidate budget on distinct tile multisets
-  marketFloor: number; // optional common-tile bid floor while building a small, balanced rack
+export interface LalaParams extends ValueParams {
   mu0: number;        // points per coin when the budget is on track
   muAlpha: number;    // how strongly budget pressure moves mu
   muMin: number;
@@ -50,7 +33,6 @@ export interface LalaParams extends ValueParams, RolloutParams {
                       // broke rack is valued as if its missing letters were 90% likely,
                       // so Lala held complete words for 25+ rounds with 1 coin.
   starveBal: number;  // below this many coins, with starveT+ auctions left, cash the best
-  starveMinLen: number; // minimum word length for liquidity rescue; 7 preserves the 3x bonus
   starveT: number;    // 4+ letter word even if holding might pay more (live: starved
                       // hoarders lose 15+ auctions in a row; 0 = off)
   playK: number;      // leftover value scale when deciding whether to play
@@ -69,7 +51,6 @@ export interface LalaParams extends ValueParams, RolloutParams {
   hiBoost: number;    // extra marginal value for 4+ point letters (top bots buy 2.2-2.8 of
                       // them per match, v2 bought 1.87; they return more points per coin)
   completeMul: number; // bid at least completeMul x the going price for a letter that
-  completeValue: number; // optional bid floor per point of immediate completion gain
   completeMin: number; // completes a completeLen+ letter word worth completeMin+ more points
   completeLen: number; // than the best word now (top bots pay 1.2-1.4x for these; v2 paid 1.18x)
   vowelBal: number;   // extra value for a vowel on a vowel-poor rack (or a consonant on a vowel-rich one)
@@ -86,12 +67,10 @@ export interface LalaParams extends ValueParams, RolloutParams {
 }
 
 export const DEFAULT_LALA: LalaParams = {
-  rollout: 0, ...DEFAULT_ROLLOUT,
-  expertCompletion: true, memoizeRack: true, uniquePlays: false, marketFloor: 0,
   winP: 0.6, maxMissing: 3, rho: 1.0, kappa0: 2.5, kappa1: 0.5, dupDecay: 0.6, liveUse: 0, vowelUse: 0, leaveCapN: 0, leaveW: 0, leaveLive: 0, leaveScale: 1, minLen: 2, maxLen: 8,
   mu0: 0.25, muAlpha: 1.0, muMin: 0.05, muMax: 1.5, share: 0.2, incomeW: 0.7,
-  premium: 1.0, liq: 0.1, playMargin: 0, coinW: 0, affordK: 0, starveBal: 0, starveMinLen: 4, starveT: 8, playK: 1, minPlayLen: 2, kappaT: 15, kappaMin: 0.3,
-  phasePrices: 0, priceN0: 8, shadeSigma: 0.35, earlyN: 0, earlyPremium: 1, paceRate: 0, paceK: 0.1, paceMax: 1.4, hiBoost: 0, completeMul: 0, completeValue: 0, completeMin: 12, completeLen: 6, vowelBal: 0, capMul: 99, muMode: 0, riskN: 0, riskUp: 1, riskGap: 25, lateN: 12, lateMu: 1, bidNoise: 0, seed: 1,
+  premium: 1.0, liq: 0.1, playMargin: 0, coinW: 0, affordK: 0, starveBal: 0, starveT: 8, playK: 1, minPlayLen: 2, kappaT: 15, kappaMin: 0.3,
+  phasePrices: 0, priceN0: 8, shadeSigma: 0.35, earlyN: 0, earlyPremium: 1, paceRate: 0, paceK: 0.1, paceMax: 1.4, hiBoost: 0, completeMul: 0, completeMin: 12, completeLen: 6, vowelBal: 0, capMul: 99, muMode: 0, riskN: 0, riskUp: 1, riskGap: 25, lateN: 12, lateMu: 1, bidNoise: 0, seed: 1,
 };
 
 export interface Decision extends Action {
@@ -105,19 +84,12 @@ export class Lala implements Agent {
   readonly name: string;
   readonly p: LalaParams;
   private valuer: Valuer;
-  private roll: Rollout;
-  lastRollout: { bid: number; gain: number; futures: number; plans: number; ms: number } | null = null;
   private rng: Rng;
-  private expert: ExpertPolicy;
-  private future: FuturePolicy;
   last?: Decision;
 
   constructor(private dict: Dict, params: Partial<LalaParams> = {}, name = "Lala") {
     this.p = { ...DEFAULT_LALA, ...params };
     this.valuer = new Valuer(dict);
-    this.roll = new Rollout(dict);
-    this.expert = new ExpertPolicy(dict);
-    this.future = new FuturePolicy(dict);
     this.rng = new Rng(this.p.seed);
     this.name = name;
   }
@@ -221,14 +193,15 @@ export class Lala implements Agent {
     }
 
     // Second to last: a tile won now can still be played in the final
-    // window, and coins have no later scoring use. Spend the remaining
-    // coins even on a useless tile to deny opponents their last improvement.
+    // window, and coins are worth nothing after it. Bid everything on any
+    // letter that improves the cash-out.
     if (T === 2) {
       const now = bestPartition(this.dict, rack, 2, 30);
       const plus = new Uint8Array(rack);
       plus[v.letter]!++;
       const withL = bestPartition(this.dict, plus, 2, 30);
       const gain = withL.reward - now.reward;
+      const bid = gain > 0 ? balance : 0;
       // Words in both plans are safe to play now, leaving less to do in the
       // final one-second window.
       const rest = [...withL.words];
@@ -240,18 +213,7 @@ export class Lala implements Agent {
           rest.splice(j, 1);
         }
       }
-      // If the tile cannot improve our cash-out, lock in all existing points
-      // now. Otherwise retain the tiles needed by the improved plan.
-      if (gain <= 0) safe.splice(0, safe.length, ...now.words);
-      // Coins cannot improve our own score after this purchase. Denying the
-      // tile can still protect placement, even when its own marginal is zero.
-      const bid = balance + safe.reduce((sum, w) => sum + wordReward(w), 0);
       return { words: safe, bid, value: now.reward, marginal: gain, mu: 0, ms: performance.now() - t0 };
-    }
-
-    if (p.expertPolicy) {
-      const expert = p.expertPolicy === 5 ? this.future.act(v, p) : this.expert.act(v, p);
-      if (expert) return expert;
     }
 
     const futureDraws = Math.max(0, T - 2);
@@ -267,17 +229,8 @@ export class Lala implements Agent {
     avgPrice = unseenTot ? avgPrice / unseenTot : 11;
     const withCoins = (coins: number): ValueParams =>
       p.affordK > 0 ? { ...p, winP: p.winP * Math.max(0.05, Math.min(1, coins / (p.affordK * avgPrice))) } : p;
-    // Anagrams leave exactly the same tiles and used to trigger repeated
-    // dictionary scans. All other inputs are fixed during this act call.
-    const cache = new Map<string, ReturnType<Valuer["evaluate"]>>();
-    const evalRack = (r: Counts, mu: number, kMul = 1, coins = balance) => {
-      const key = `${mu}/${kMul}/${p.affordK > 0 ? coins : 0}/${String.fromCharCode(...r)}`;
-      const found = p.memoizeRack ? cache.get(key) : undefined;
-      if (found) return found;
-      const result = this.valuer.evaluate(r, v.letter, v.tracker.unseen, futureDraws, prices, mu, withCoins(coins), ks, kMul);
-      if (p.memoizeRack) cache.set(key, result);
-      return result;
-    };
+    const evalRack = (r: Counts, mu: number, kMul = 1, coins = balance) =>
+      this.valuer.evaluate(r, v.letter, v.tracker.unseen, futureDraws, prices, mu, withCoins(coins), ks, kMul);
 
     // Word plays: take a word whenever cashing it beats holding its tiles.
     let mu = this.mu(v, balance, 0, prices, futureDraws);
@@ -285,16 +238,7 @@ export class Lala implements Agent {
     // bidding) doesn't stop us cashing in words we already have.
     let hold = evalRack(rack, mu, p.playK);
     for (let iter = 0; iter < 4; iter++) {
-      let cands = playable(this.dict, rack, futureDraws <= 3 ? 2 : p.minPlayLen, p.uniquePlays ? Infinity : 8);
-      if (p.uniquePlays) {
-        const seen = new Set<string>();
-        cands = cands.filter(i => {
-          const key = [...this.dict.words[i]!].sort().join("");
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        }).slice(0, 8);
-      }
+      const cands = playable(this.dict, rack, futureDraws <= 3 ? 2 : p.minPlayLen, 8);
       if (!cands.length) break;
       const phi = futureDraws / 60;
       const perCoin = p.coinW * coinValue(T) * p.leaveScale;
@@ -322,7 +266,7 @@ export class Lala implements Agent {
       if (bestIdx < 0 && balance < p.starveBal && futureDraws >= p.starveT) {
         let bestTotal = -Infinity;
         for (const i of cands) {
-          if (this.dict.len[i]! < p.starveMinLen) continue;
+          if (this.dict.len[i]! < 4) continue;
           const after = evalRack(removeWord(rack, this.dict.words[i]!), mu, p.playK);
           const total = this.dict.reward[i]! + after.base;
           if (total > bestTotal) {
@@ -340,23 +284,12 @@ export class Lala implements Agent {
       hold = bestAfter;
     }
 
-    // The shadow price counts the rack at full value: `hold` is scaled by
-    // playK for the play decision only, and a low playK must not make Lala
-    // think it is poorer than it is.
-    const rackValue = p.playK === 1 ? hold.base : evalRack(rack, mu).base;
-    mu = this.mu(v, balance, rackValue, prices, futureDraws);
+    mu = this.mu(v, balance, hold.base, prices, futureDraws);
     const val = evalRack(rack, mu);
     let marginal = Math.max(0, val.withLetter - val.base);
     if (p.vowelBal > 0) marginal *= this.balanceFactor(rack, v.letter);
     if (p.hiBoost > 0 && VALUE[v.letter]! >= 4) marginal *= 1 + p.hiBoost;
     let bid = (marginal / mu) * p.premium;
-    if (p.marketFloor > 0 && T > 12 && balance >= 25 && VALUE[v.letter]! <= 2 && rack[v.letter]! < 2) {
-      let tiles = 0, vowels = 0;
-      for (let k = 0; k < 26; k++) { tiles += rack[k]!; if (VOWELS.has(k)) vowels += rack[k]!; }
-      const fraction = tiles ? vowels / tiles : 0.4;
-      const balanced = VOWELS.has(v.letter) ? fraction <= 0.5 : fraction >= 0.25;
-      if (tiles < 8 && balanced) bid = Math.max(bid, p.marketFloor * prices[v.letter]!);
-    }
     if (v.round <= p.earlyN) bid *= p.earlyPremium;
     if (p.paceRate > 0 && T > 8 && marginal > 0) {
       let won = 0;
@@ -364,54 +297,16 @@ export class Lala implements Agent {
       const behind = p.paceRate * (v.round - 1) - won;
       if (behind > 1) bid *= Math.min(p.paceMax, 1 + p.paceK * (behind - 1));
     }
-    // Monte Carlo playouts replace the formula bid when there are target
-    // words to chase; the formula (and its cap) stays as the fallback.
-    let usedRollout = false;
-    this.lastRollout = null;
-    if (p.rollout && T >= 4) {
-      const prior = (round: number, k: number): number =>
-        (p.phasePrices ? phasePrice(round, k, p.phasePrices === 2) : null) ?? LIVE_PAID[k]!;
-      const scaleK = (k: number) => prices[k]! / prior(v.round, k);
-      const r = this.roll.value({
-        rack, letter: v.letter, balance, unseen: v.tracker.unseen, bagRemaining: T - 1, round: v.round,
-        priceAt: (round, k) => Math.max(1, prior(round, k) * scaleK(k)),
-        coinValue,
-      }, p);
-      if (r) {
-        // Bounded: the rollout steers the formula bid within [min, max] x.
-        const formula = Math.min(bid, p.capMul * prices[v.letter]!);
-        bid = Math.max(p.rolloutMin * formula, Math.min(p.rolloutMax * Math.max(formula, 1), r.bid));
-        // Futures win nearly every affordable letter, which flatters rare
-        // letters (a Q for AEIRT came out at 2.5x): hard ceiling at the cap.
-        bid = Math.min(bid, p.rolloutCap * prices[v.letter]!);
-        usedRollout = true;
-        this.lastRollout = { bid: r.bid, gain: r.gainAtPrice, futures: r.futures, plans: r.plans, ms: r.ms };
-      }
-    }
-    if (T > 3 && !usedRollout) bid = Math.min(bid, p.capMul * prices[v.letter]!);
+    if (T > 3) bid = Math.min(bid, p.capMul * prices[v.letter]!);
     // Finishing a word now is worth more than the letter's average value:
     // the points are certain and the coins come back for the next buy.
-    let completionFloor = 0;
-    if (p.completeMul > 0 || p.completeValue > 0) {
+    if (p.completeMul > 0) {
       const gain = this.completionGain(rack, v.letter, p.completeLen);
-      if (gain >= p.completeMin) {
-        completionFloor = Math.max(p.completeMul * prices[v.letter]!, p.completeValue * gain);
-        bid = Math.max(bid, completionFloor);
-      }
+      if (gain >= p.completeMin) bid = Math.max(bid, p.completeMul * prices[v.letter]!);
     }
     if (T <= p.riskN && marginal > 0 && this.chasingFourth(v, val.base)) bid *= p.riskUp;
     if (p.bidNoise > 0) bid *= Math.exp(p.bidNoise * this.rng.normal());
     if (v.auctionType === "FirstPrice") bid = this.shade(bid, prices[v.letter]!);
-    if (p.expertPolicy && p.expertWordMode === 1) {
-      const learned = this.expert.bid({ ...v, rack, balance, score: v.score + words.reduce((s, w) => s + wordReward(w), 0) }, p);
-      if (learned !== null) {
-        bid = learned;
-        if (p.expertCompletion) {
-          const floor = v.auctionType === "FirstPrice" ? this.shade(completionFloor, prices[v.letter]!) : completionFloor;
-          bid = Math.max(bid, floor);
-        }
-      }
-    }
     bid = Math.max(0, Math.min(balance, Math.floor(bid)));
     return { words, bid, value: val.base, marginal, mu, ms: performance.now() - t0 };
   }

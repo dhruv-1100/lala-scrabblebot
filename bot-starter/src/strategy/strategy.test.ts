@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Dict, loadDict } from "../engine/dict.js";
+import { loadDict } from "../engine/dict.js";
 import { countsOf } from "../engine/letters.js";
 import { Tracker } from "../engine/tracker.js";
 import { Lala } from "./lala.js";
@@ -26,11 +26,11 @@ test("final auction: cash out everything, bid nothing", () => {
   assert.ok(d.words.includes("RETAINS") || d.words.join("").length >= 7);
 });
 
-test("second-to-last auction: spend otherwise worthless coins on gain or denial", () => {
+test("second-to-last auction: all-in only if the letter helps the cash-out", () => {
   const helps = new Lala(dict, TUNED).act(view("ETAINS", "R", 2, 57));
   assert.equal(helps.bid, 57);
   const useless = new Lala(dict, TUNED).act(view("JJVV", "Q", 2, 57));
-  assert.equal(useless.bid, 57);
+  assert.equal(useless.bid, 0);
 });
 
 test("bids are integers within balance and decisions are fast", () => {
@@ -88,72 +88,4 @@ test("pays the completion premium for a letter that finishes a 7-letter word", (
   const finish = lala.act(view("ETAINS", "R", 30, 100));
   const price = lala.prices(view("ETAINS", "R", 30, 100))[17]!;
   assert.ok(finish.bid >= Math.floor(1.4 * price), `bid ${finish.bid} < 1.4 x ${price}`);
-});
-
-test('memoized and uncached decisions agree, including affordability-dependent values', () => {
-  for (const affordK of [0, 2]) {
-    const fast = new Lala(dict, { ...TUNED, affordK, memoizeRack: true });
-    const slow = new Lala(dict, { ...TUNED, affordK, memoizeRack: false });
-    for (const [r, l] of [['AEINRST','E'],['ADDEEILNNOOSTU','X'],['QUIXOTE','E'],['EEEEII','A']]) {
-      const v = view(r!, l!, 30, 35);
-      const a=fast.act(v), b=slow.act(v);
-      assert.deepEqual({words:a.words,bid:a.bid,value:a.value,marginal:a.marginal},
-        {words:b.words,bid:b.bid,value:b.value,marginal:b.marginal});
-    }
-  }
-});
-
-test('liquidity rule can be restricted to full-multiplier words', async () => {
-  const { Dict } = await import('../engine/dict.js');
-  const small = new Dict(['RETAIN', 'RETAINS']);
-  const p = { ...TUNED, starveBal:25, starveMinLen:7, playMargin:1e6 };
-  assert.deepEqual(new Lala(small,p).act(view('RETAINS','Z',30,5)).words,['RETAINS']);
-  assert.deepEqual(new Lala(small,p).act(view('RETAIN','Z',30,5)).words,[]);
-});
-
-test('completion-value bid is proportional to reward and remains affordable', async () => {
-  const { Dict } = await import('../engine/dict.js');
-  const small = new Dict(['QUIXOTE']);
-  const params={...TUNED,capMul:0,completeMul:0,completeValue:0.5};
-  assert.equal(new Lala(small,params).act(view('UIXOTE','Q',30,100)).bid,34);
-  assert.equal(new Lala(small,params).act(view('UIXOTE','Q',30,13)).bid,13);
-  assert.equal(new Lala(small,{...params,completeValue:0}).act(view('UIXOTE','Q',30,100)).bid,0);
-});
-
-test('last useful auction can spend income from words safe in both plans', async () => {
-  const { Dict } = await import('../engine/dict.js');
-  const small=new Dict(['AX','RETAINS']);
-  const d=new Lala(small,TUNED).act(view('AXETAINS','R',2,10));
-  assert.deepEqual(d.words,['AX']);
-  assert.equal(d.bid,19); // 10 coins + 9 from AX; the live runtime rebids after acknowledgement
-});
-
-test('penultimate denial uses safe word income without sacrificing existing points', () => {
-  const small = new Dict(['AX', 'RETAINS']);
-  const v = view('AX', 'R', 2, 5);
-  const opponent = v.tracker.opps.get(1)!;
-  opponent.known = countsOf('ETAINS');opponent.balance = 13;
-  const d = new Lala(small,TUNED).act(v);
-  assert.deepEqual(d.words,['AX']);assert.equal(d.bid,14);
-  assert.ok(d.bid>opponent.balance, 'safe AX income can deny the rival its 21-point RETAINS');
-});
-
-test('learned bids retain the configured completion premium', () => {
-  const small = new Dict(['QUIXOTE']);
-  const p = {...TUNED,expertPolicy:1,expertWordMode:1,completeMul:0,completeValue:1,playMargin:1000};
-  const d = new Lala(small,p).act(view('UIXOTE','Q',30,100));
-  assert.ok(d.bid>=69, `completion bid was overwritten: ${d.bid}`);
-});
-
-test("rollout bids stay within bounds of the formula bid and run fast", async () => {
-  const { LIVE_CONTROL } = await import("./params.js");
-  const live = new Lala(dict, { ...TUNED, ...LIVE_CONTROL });
-  const formula = new Lala(dict, { ...TUNED, ...LIVE_CONTROL, rollout: 0 });
-  for (const [r, l, left] of [["EIRTOD", "S", 30], ["BCDFGH", "Z", 45], ["AEL", "T", 60], ["AEIRT", "Q", 50]] as const) {
-    const a = live.act(view(r, l, left, 80));
-    const b = formula.act(view(r, l, left, 80));
-    assert.ok(a.bid <= Math.ceil(b.bid * 1.05) + 1, `${r}+${l}: rollout ${a.bid} > formula ${b.bid}`);
-    assert.ok(a.bid >= Math.floor(b.bid * 0.6) - 1, `${r}+${l}: rollout ${a.bid} < 0.6 x formula ${b.bid}`);
-    assert.ok(a.ms < 400, `slow rollout decision ${a.ms}ms`);
-  }
 });
