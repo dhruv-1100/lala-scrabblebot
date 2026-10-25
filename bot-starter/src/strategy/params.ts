@@ -2,7 +2,7 @@
 import type { LalaParams } from "./lala.js";
 
 // Logged by the live bot so live results can be credited to a version.
-export const VERSION = "v2.8-bandit";
+export const VERSION = "v2.7.3";
 
 export const TUNED: Partial<LalaParams> = {
   muAlpha: 0.6, kappa0: 3.5, winP: 0.9, dupDecay: 0.8, kappa1: 1, maxMissing: 2,
@@ -69,18 +69,3 @@ export const RIVAL_STYLES: Partial<LalaParams>[] = [
 // auctions) lost: arm A 11 games place 2.36, 0% bottom-two; arm B 7 games place
 // 3.43, 14% bottom-two. Off until the next variant.
 export const VARIANT_B: Partial<LalaParams> = {};
-
-// Strategy arms the live bandit chooses between (src/live/bandit.ts). Each
-// match plays one arm on top of TUNED; finishes update the estimates. Priors
-// are past live results, capped at 15 games so recent games can overrule them.
-export const ARMS: { name: string; params: Partial<LalaParams>; prior: { n: number; mean: number } }[] = [
-  // v2.7 family: 95 live games, rating value +0.40/game.
-  { name: "base", params: {}, prior: { n: 15, mean: 0.4 } },
-  // Bid 10% more over the first 25 auctions: busts start with cheap,
-  // vowel-heavy racks (6.6 letter points, 0 high-value tiles vs 13.3 and 1.0
-  // in wins) and Lala then bids timidly. +15% version: 8 games, +0.29.
-  { name: "early-push", params: { earlyN: 25, earlyPremium: 1.1 }, prior: { n: 8, mean: 0.3 } },
-  // Just-in-time (v3.3 style): cash complete 7+ words promptly, 1.5x for
-  // word-completing letters. 39 live games, +0.22.
-  { name: "jit", params: { minPlayLen: 7, playK: 0.4, completeMul: 1.5 }, prior: { n: 15, mean: 0.22 } },
-];
