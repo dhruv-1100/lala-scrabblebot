@@ -16,7 +16,8 @@ import type { Identity } from "spacetimedb";
 import { loadDict } from "../engine/dict.js";
 import { LIVE_PAID } from "../sim/agents.js";
 import { Lala, type LalaParams } from "../strategy/lala.js";
-import { TUNED, VERSION, VARIANT_B } from "../strategy/params.js";
+import { TUNED, VERSION, ARMS } from "../strategy/params.js";
+import { Bandit } from "./bandit.js";
 import { buildView, readMatch } from "./view.js";
 import { idx, countsToString } from "../engine/letters.js";
 
@@ -36,19 +37,12 @@ fs.mkdirSync(LOG_DIR, { recursive: true });
 
 const params: Partial<LalaParams> = { ...TUNED, ...JSON.parse(process.env.LALA_PARAMS ?? "{}") };
 const dict = loadDict();
-const lala = new Lala(dict, params, BOT_NAME);
-// Interleaved A/B: a hash of the match id picks the arm. (Plain parity broke:
-// Lala's match ids often step by exactly 8, putting every game in arm A.)
-const AB_ON = Object.keys(VARIANT_B).length > 0 && process.env.AB !== "0";
-const paramsB: Partial<LalaParams> = { ...params, ...VARIANT_B };
-const lalaB = new Lala(dict, paramsB, `${BOT_NAME}-B`);
-function arm(matchId: bigint): "A" | "B" {
-  // murmur3 finaliser: a well-mixed bit even when ids step by a constant.
-  let h = Number(matchId % 4294967296n) >>> 0;
-  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
-  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
-  h ^= h >>> 16;
-  return AB_ON && (h & 1) === 1 ? "B" : "A";
+// One Lala per strategy arm; the bandit picks the arm for each match.
+const lalas = new Map(ARMS.map((a) => [a.name, new Lala(dict, { ...params, ...a.params }, `${BOT_NAME}-${a.name}`)]));
+const armParams = new Map(ARMS.map((a) => [a.name, { ...params, ...a.params }]));
+const bandit = new Bandit(path.join(LOG_DIR, "bandit.json"), ARMS.map((a) => ({ name: a.name, ...a.prior })));
+function arm(matchId: bigint): string {
+  return bandit.armFor(matchId);
 }
 
 // ---------- logging ----------
@@ -173,7 +167,7 @@ function decide(auctionId: bigint): void {
   const balance = m.balances.get(me)?.balance ?? 0;
   try {
     const view = buildView(m, me, a.letter);
-    const d = (arm(a.matchId) === "B" ? lalaB : lala).act(view);
+    const d = lalas.get(arm(a.matchId))!.act(view);
     bid = d.bid;
     words = d.words;
     info = { value: +d.value.toFixed(2), marginal: +d.marginal.toFixed(2), mu: +d.mu.toFixed(3) };
@@ -240,10 +234,12 @@ function onMatchEnded(matchId: bigint): void {
     match: matchId, place, score: Number(mine.score), balance: Number(mine.balance),
     scores: parts.map((p) => ({ bot: p.botId, score: p.score })).sort((a, b) => Number(b.score - a.score)),
     words, tiles: won.length, spent: won.reduce((s, r) => s + Number(r.paid), 0),
-    arm: arm(matchId), version: VERSION, params: arm(matchId) === "B" ? paramsB : params,
+    arm: arm(matchId), version: VERSION, params: armParams.get(arm(matchId)),
   };
   jsonl("matches", row);
+  const learned = bandit.record(matchId, place);
   log(`match ${matchId} ended: place ${place}/${parts.length} score ${mine.score} arm ${arm(matchId)} words ${words.join(" ")}`);
+  if (learned) log(`bandit: ${bandit.summary()}`);
   setTimeout(() => maybeJoinLobby(true), 300);
 }
 
@@ -459,6 +455,6 @@ process.on("uncaughtException", (e) => {
   process.exit(1); // pm2 restarts us
 });
 
-log(`version ${VERSION}${AB_ON ? ` (A/B by match-id hash; arm B plays ${JSON.stringify(VARIANT_B)})` : ""}`);
+log(`version ${VERSION}; bandit arms ${ARMS.map((a) => a.name).join(", ")}; ${bandit.summary()}`);
 log(`params ${JSON.stringify(params)}`);
 connect();

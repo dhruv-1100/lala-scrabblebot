@@ -284,7 +284,11 @@ export class Lala implements Agent {
       hold = bestAfter;
     }
 
-    mu = this.mu(v, balance, hold.base, prices, futureDraws);
+    // The shadow price counts the rack at full value: `hold` is scaled by
+    // playK for the play decision only, and a low playK must not make Lala
+    // think it is poorer than it is.
+    const rackValue = p.playK === 1 ? hold.base : evalRack(rack, mu).base;
+    mu = this.mu(v, balance, rackValue, prices, futureDraws);
     const val = evalRack(rack, mu);
     let marginal = Math.max(0, val.withLetter - val.base);
     if (p.vowelBal > 0) marginal *= this.balanceFactor(rack, v.letter);
