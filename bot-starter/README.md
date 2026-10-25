@@ -12,6 +12,19 @@ Team **Yuvak**, bot **Lala**. Built on the official `bot-starter`.
 | `scripts/` | `dump.ts` (snapshot every public table), probes, benchmarks, traces |
 | `ANALYSIS.md` | Findings and the strategy change each one caused |
 
+## Results
+
+Live, 25 Oct 2026 (6-bot Vickrey lobby matches against the full field):
+
+| Version | Games | Wins | Avg place | Avg score | Rating |
+|---|---|---|---|---|---|
+| v2.7.4 (site version 7) | 133 | 19% | 3.09 | 81.1 | 1933 +/- 97 after 66 games |
+| v2.7.5 (site version 8, from 06:42 UTC) | 8 | 0% | 3.63 | 78.8 | 1688 +/- 193 (provisional) |
+
+An average bot in a 6-bot field wins 17% with average place 3.5. The current leaders
+(Waupus, james) win 49-56%. See ANALYSIS.md §13 for what was learned from them and why
+v2.7.5 tightens the price cap.
+
 ## Setup
 
 Node 20+.
@@ -75,6 +88,14 @@ npm run arena -- --field market --n 2000
 npm run arena -- --field market --n 2000 --params '{"mu0":0.4}' --base '{}'
 # other fields: sims (module's sim bots), starter, self (Lala clones), mixed, lalamix
 npm run arena -- --field self --n 1000
+# fields: market, livelike, pop, top (the late-2026 leaders; matches live Lala best)
+# phase profile of one simulated seat (coins on hand, tiles, bid levels per stage)
+npx tsx src/sim/profile.ts --field top --n 300
+# paired sweep: base once, then each variant on the same seeds
+npx tsx src/sim/sweep.ts --field top --n 400 --variants '[{"capMul":1.35},{"mu0":0.36}]'
+# live phase profile of any bot vs Lala, and Lala's record since a time
+npx tsx analysis/study.ts 138 80
+npx tsx analysis/since.ts 2026-10-25T06:42:05Z
 # coordinate search
 npm run tune -- --field market --n 280 --grid '{"mu0":[0.3,0.4]}'
 ```

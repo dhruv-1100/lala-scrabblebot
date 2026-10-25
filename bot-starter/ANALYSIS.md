@@ -230,3 +230,48 @@ worse, **0.5 win +4.0 +/- 3.2 pts, place -0.117 +/- 0.072**, 0.6 much worse (+0.
 **Recent prices (v2.6.1).** Refit on the latest 900 matches: high-value letters 2-5 coins
 cheaper mid/late (mid Z 40 -> 35, late Q 23 -> 18), 1-point letters unchanged. Sim neutral
 (its market bots still price from the old table), shipped because the live market moved.
+
+## 13. v2.7.x: a calibrated field, and the price cap (v2.7.4, v2.7.5)
+
+**What happened between §12 and here.** v2.6/v2.6.1 and the later v2.8 bandit (per-match
+strategy arms) both lost live and were reverted; v2.7.3 is exactly the v2.7 code. The live
+runtime gained a stall watchdog, drain restarts (`touch .drain`) and version logging.
+
+**v2.7.4: narrow starvation rule.** Live games showed Lala broke for 15-25 rounds while holding
+a complete 7-8 letter word. Below 8 coins with 10+ auctions left, cash the best 7+ letter word.
+Paired sim (market, n=1200): win +3.8 +/- 1.9 pts, place -0.139, last places 2.9% -> 1.2%.
+
+**Ideas that stayed off** (all neutral in paired sim vs v2.7.4, n=1200-1600; code kept, default
+off): mid-game thrift (`midN/midMu`), chasing 1st late (`chaseN/chaseGap/chaseUp`), focus on the
+best target word's letters (`focusMul/focusCut/focusT`, modelled on Lambi Lambiii).
+
+**The leaders, late 2026** (`analysis/study.ts`, live phase profiles):
+
+| | wins | coins at round 20 / 45 / 56 | rounds 1-20: tiles, spent, bid/price | rounds 46-68: tiles | late word points |
+|---|---|---|---|---|---|
+| Waupus | 51% | 60 / 39 / 26 | 3.9, 49, 1.10 | 4.6 | 31 |
+| james | 38% | 61 / 42 / 25 | 2.9, 49, 1.19 | 4.9 | 22 |
+| Lala v2.7.x | 11% | 47 / 15 / 18 | 4.3, 66, 1.36 | 2.5 | 18 |
+
+**The simulator was too easy.** `src/sim/profile.ts` prints the same profile for a simulated
+seat. In every existing field Lala won 42-57% (live: 11-19%) and bought ~3.3 early tiles for
+~50 coins (live 4.3 for 66), so tuning there never carried over. The new **`top` field**
+(`TOP_STYLES`: two Waupus-style rivals, one james-style, one Lambi-style, one v2.7-like)
+reproduces live Lala: 17-22% wins, place 3.05-3.16, score 78-80, 4.1 early tiles for 62 coins,
+49 coins at round 20.
+
+**Copying Waupus does not help.** In the top field a Waupus-like Lala (early bids x0.8, late
+reserve) placed 3.31-3.51 vs 3.05-3.16: the leaders' thrift is a symptom of something else
+they do better, not the cause.
+
+**v2.7.5: price cap 1.6x -> 1.25x the going price.** Screen in the top field (n=300 each, 9
+variants): only `capMul 1.35` won significantly; more aggression (`mu0 0.25`), a bigger
+completion premium (1.7) and turning the starvation rule off were all worse. Fresh seeds
+(n=900, paired): capMul 1.35 win +4.6 +/- 2.3 pts, place -0.16; **capMul 1.25 win +5.0 +/- 2.7
+pts (21% -> 26%), place -0.23 +/- 0.08, score +2.8, rating value +0.095 +/- 0.038.** Shipped
+06:42 UTC 25 Oct. The completion premium (1.4x for a letter that completes a 6+ letter word
+worth 12+ more points) still lifts bids above the cap.
+
+**Live record.** Site version 7 (v2.7.4, 03:58-06:42 UTC 25 Oct): 133 clean games, 19% wins,
+average place 3.09, average score 81.1, rating 1933 +/- 97 at 66 games. Site version 8
+(v2.7.5) started 06:42 UTC; first 8 games: 0 wins, place 3.63, score 78.8 (too few to judge).
