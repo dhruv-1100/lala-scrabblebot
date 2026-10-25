@@ -2,7 +2,7 @@
 import type { LalaParams } from "./lala.js";
 
 // Logged by the live bot so live results can be credited to a version.
-export const VERSION = "v2.7.3";
+export const VERSION = "v2.7.4";
 
 export const TUNED: Partial<LalaParams> = {
   muAlpha: 0.6, kappa0: 3.5, winP: 0.9, dupDecay: 0.8, kappa1: 1, maxMissing: 2,
@@ -24,7 +24,13 @@ export const TUNED: Partial<LalaParams> = {
   // at 2-2.5x instead of building 7+ at 3x, and v2.2's own score fell 22 points
   // against weaker best rivals (101 vs 109). Both rules are off.
   mu0: 0.3, capMul: 1.6, premium: 1.0, lateMu: 0.6,
-  starveBal: 0,
+  // v2.7.4: narrow starvation rule. Live games kept showing Lala broke for
+  // 15-25 rounds while holding a complete 7-8 letter word (PIONEERS at 2
+  // coins with 16 auctions left). Below 8 coins with 10+ auctions left, cash
+  // the best word of 7+ letters (keeps the 3x bonus; v2.2's 4+ letter version
+  // below 15 coins cost points). Paired sim (market, n=1200): win +3.8 +/- 1.9
+  // pts, place -0.139 +/- 0.047, score +1.7, last places 2.9% -> 1.2%.
+  starveBal: 8, starveT: 10, starveMinLen: 7,
   // v2.5: learned from the top bots (analysis/reverse.ts, last 1200 matches).
   // They pay 1.2-1.42x the going price for a letter that completes a word
   // within a round (vs 1.18-1.24x for other letters); v2 paid 1.18x vs 1.20x.
