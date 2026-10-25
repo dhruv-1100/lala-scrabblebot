@@ -2,7 +2,7 @@
 import type { LalaParams } from "./lala.js";
 
 // Logged by the live bot so live results can be credited to a version.
-export const VERSION = "v3.1-recovery";
+export const VERSION = "v3.2-ab";
 
 export const TUNED: Partial<LalaParams> = {
   // The existing leave coefficients were tuned with the old duplicate
@@ -74,4 +74,11 @@ export const LIVE_CONTROL: Partial<LalaParams> = {
   valuationFix: 1, expertPolicy: 0, expertWordMode: 0,
   capMul: 1.3, completeValue: 0.5, expertCompletion: true,
 };
-export const VARIANT_B: Partial<LalaParams> = {};
+// v3.2 A/B: "just in time", the style of the bots winning now (Lambi Lambiii,
+// Lionel, Chinese Dante; analysis/reverse.ts, last 250-700 matches). They hold
+// a tile 7-13 rounds (Lala 18-19), 17-29% of their buys complete a word within
+// a round (Lala 8%), Lambi pays 1.53x for those letters, and they are short of
+// coins 1-7 rounds a match (Lala 14-15). Arm B cashes complete 7+ letter words
+// promptly (playK 0.4 for play decisions only, no short words before the
+// endgame) and pays 1.5x for word-completing letters.
+export const VARIANT_B: Partial<LalaParams> = { minPlayLen: 7, playK: 0.4, completeMul: 1.5 };
